@@ -125,7 +125,7 @@ All settings are stored internally as a single `Mode` (STT provider + LLM provid
 Swift packages, each depending only on those above it:
 
 ```
-Core        Session pipeline, Mode, provider protocols (STTProvider, LLMProvider, TextInserter, ActionAdapter)
+Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter; LLMProvider and ActionAdapter arrive with tickets 05 and 11)
 Audio       Mic capture, silence trim, waveform levels
 STT         WhisperKit, FluidAudio/Parakeet, cloud providers
 LLM         MLX-Swift (Qwen), Ollama, cloud providers
@@ -136,7 +136,8 @@ App         Menu bar, hotkeys (CGEventTap), onboarding, settings, history, model
 ```
 
 - A **Session** = one hotkey press: start → audio → transcript → result (insert or action) → end. Future hands-free / conversational modes are new session kinds, not a rewrite.
-- Every step sits behind a protocol so it can be tested with fakes. A future hosted (paid) service is just another `STTProvider` / `LLMProvider`.
+- Every step sits behind a protocol so it can be tested with fakes. A future hosted (paid) service is just another `SpeechToText` / `LLMProvider`.
+- Packages are added by the ticket that first needs them (NotchUI in 04, LLM in 05, Actions in 11) rather than created empty up front.
 
 ## 7. Quality targets
 
