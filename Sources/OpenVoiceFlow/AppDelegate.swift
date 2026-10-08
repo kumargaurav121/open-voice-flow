@@ -2,7 +2,6 @@ import AppKit
 import Audio
 import Core
 import Insertion
-import OSLog
 import STT
 
 @MainActor
@@ -15,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case transcribing
     }
 
-    private let log = Logger(subsystem: "dev.openvoiceflow.OpenVoiceFlow", category: "session")
+    private let log = AppLog()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let hotkeys = HotkeyMonitor()
     private let transcriber = WhisperKitTranscriber(modelsDirectory: AppDelegate.modelsDirectory)
@@ -64,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self?.refreshPermissions() }
         }
 
+        log.notice("Launched")
         loadModel()
     }
 
@@ -73,10 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             do {
                 let started = ProcessInfo.processInfo.systemUptime
                 try await transcriber.prepare()
-                log.info("Speech model ready in \(ProcessInfo.processInfo.systemUptime - started, format: .fixed(precision: 1))s")
+                log.notice(String(format: "Speech model ready in %.1fs", ProcessInfo.processInfo.systemUptime - started))
                 status = .ready
             } catch {
-                log.error("Speech model failed to load: \(error.localizedDescription, privacy: .public)")
+                log.error("Speech model failed to load: \(error)")
                 status = .modelFailed
             }
         }
@@ -99,14 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .inserted(let t):
             status = .ready
             lastMessage = String(format: "Last dictation: text in %.1f s", t.transcribe + t.insert)
-            log.info("""
-                Inserted. capture \(t.capture, format: .fixed(precision: 2))s \
-                transcribe \(t.transcribe, format: .fixed(precision: 2))s \
-                insert \(t.insert, format: .fixed(precision: 2))s
-                """)
+            log.notice(String(format: "Inserted. capture %.2fs transcribe %.2fs insert %.2fs", t.capture, t.transcribe, t.insert))
         case .ignored(let reason):
             status = .ready
-            log.info("Ignored: \(String(describing: reason), privacy: .public)")
+            log.notice("Ignored: \(reason)")
         case .failed(let failure):
             status = .ready
             lastMessage = switch failure {
@@ -114,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .transcription: "Couldn't transcribe that"
             case .insertion: "Couldn't paste the text"
             }
-            log.error("Failed: \(String(describing: failure), privacy: .public)")
+            log.error("Failed: \(failure)")
         }
     }
 
