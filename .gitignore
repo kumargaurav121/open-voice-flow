@@ -5,3 +5,7 @@ docs/eval/clips/
 build/
 *.xcodeproj/xcuserdata/
 .swiftpm/
+scripts/eval/.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/

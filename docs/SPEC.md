@@ -147,7 +147,7 @@ App         Menu bar, hotkeys (CGEventTap), onboarding, settings, history, model
 ## 8. Evaluation set
 
 - [`eval/reading-script.md`](eval/reading-script.md): numbered items read in one recording with ~2 s pauses.
-- Script splits the recording on silence, pairs chunks with item text, writes `eval/clips/NN.wav` + `eval/manifest.json`.
+- Script splits the recording on silence, pairs chunks with item text, writes `eval/clips/NN.wav` + `eval/clips/manifest.json`.
 - Second script runs a given STT (+ optional cleanup) over the set and reports WER per language and latency.
 - Audio recordings are personal data: `eval/clips/` and raw recordings are git-ignored.
 
