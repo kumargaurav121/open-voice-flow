@@ -21,6 +21,13 @@ public struct AudioClip: Sendable, Equatable {
 /// Hindi support for better English accuracy.
 public enum Language: String, CaseIterable, Sendable {
     case hinglish, english
+
+    public var displayName: String {
+        switch self {
+        case .hinglish: "Hinglish"
+        case .english: "English"
+        }
+    }
 }
 
 @MainActor

@@ -19,8 +19,10 @@ let package = Package(
         .target(name: "STT", dependencies: ["Core", .product(name: "WhisperKit", package: "WhisperKit")]),
         // Getting text into the focused app.
         .target(name: "Insertion", dependencies: ["Core"]),
+        // The notch overlay: state machine, geometry, panel and views.
+        .target(name: "NotchUI", dependencies: ["Core"]),
         // Menu-bar app: hotkeys, permissions, wiring.
-        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "Insertion"]),
+        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "Insertion", "NotchUI"]),
         // Runs the app's speech-to-text over the eval clips, for scoring with scripts/eval.
         .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT"]),
 
@@ -28,5 +30,6 @@ let package = Package(
         .testTarget(name: "AudioTests", dependencies: ["Audio"]),
         .testTarget(name: "STTTests", dependencies: ["STT"]),
         .testTarget(name: "EvalRunnerTests", dependencies: ["EvalRunner"]),
+        .testTarget(name: "NotchUITests", dependencies: ["NotchUI"]),
     ]
 )

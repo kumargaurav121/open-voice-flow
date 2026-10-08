@@ -11,6 +11,8 @@ public struct SilenceTrimmer: Sendable {
     static let speechAboveFloorDB: Float = 10
     /// Never treat anything this quiet as speech.
     static let absoluteFloorDB: Float = -55
+    /// Level reported for digital silence (no signal at all).
+    public static let silentDecibels: Float = -120
 
     public init() {}
 
@@ -36,6 +38,6 @@ public struct SilenceTrimmer: Sendable {
 
     static func decibels(_ frame: ArraySlice<Float>) -> Float {
         let meanSquare = frame.reduce(0) { $0 + $1 * $1 } / Float(frame.count)
-        return meanSquare > 0 ? 10 * log10(meanSquare) : -120
+        return meanSquare > 0 ? 10 * log10(meanSquare) : silentDecibels
     }
 }

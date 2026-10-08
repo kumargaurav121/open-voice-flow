@@ -31,6 +31,9 @@ public final class MicRecorder: AudioRecorder {
         self.buffer = buffer
     }
 
+    /// Loudness of the most recent audio, in dBFS (`SilenceTrimmer.silentDecibels` when not recording).
+    public var currentDecibels: Float { buffer?.latestDecibels ?? SilenceTrimmer.silentDecibels }
+
     public func stop() async -> AudioClip {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
@@ -60,6 +63,7 @@ private final class ConvertingBuffer: @unchecked Sendable {
     private let targetFormat: AVAudioFormat
     private let lock = NSLock()
     private var samples: [Float] = []
+    private var decibels: Float = SilenceTrimmer.silentDecibels
 
     init?(from source: AVAudioFormat, to target: AVAudioFormat) {
         guard let converter = AVAudioConverter(from: source, to: target) else { return nil }
@@ -86,7 +90,15 @@ private final class ConvertingBuffer: @unchecked Sendable {
             return pcm
         }
         guard error == nil, let channel = output.floatChannelData?[0] else { return }
-        samples.append(contentsOf: UnsafeBufferPointer(start: channel, count: Int(output.frameLength)))
+        let chunk = UnsafeBufferPointer(start: channel, count: Int(output.frameLength))
+        samples.append(contentsOf: chunk)
+        decibels = SilenceTrimmer.decibels(ArraySlice(chunk))
+    }
+
+    var latestDecibels: Float {
+        lock.lock()
+        defer { lock.unlock() }
+        return decibels
     }
 
     func drain() -> [Float] {

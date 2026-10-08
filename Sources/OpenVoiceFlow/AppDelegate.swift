@@ -2,6 +2,7 @@ import AppKit
 import Audio
 import Core
 import Insertion
+import NotchUI
 import STT
 
 @MainActor
@@ -25,9 +26,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ? englishModel
             : WhisperKitTranscriber(model: preferred, modelsDirectory: SpeechModel.modelsDirectory)
     }()
+    private let recorder = MicRecorder()
+    private lazy var notch = NotchController(
+        currentDecibels: { [recorder] in recorder.currentDecibels },
+        modeTitle: { [weak self] in (self?.language ?? .hinglish).displayName }
+    )
     private lazy var session = DictationSession(
-        recorder: MicRecorder(),
-        speechToText: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel]),
+        recorder: recorder,
+        // Always English letters and digits, whichever model or script (user requirement).
+        speechToText: LatinScriptSpeechToText(wrapping: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel])),
         inserter: PasteInserter(),
         now: { ProcessInfo.processInfo.systemUptime },
         language: { [weak self] in self?.language ?? .hinglish }
@@ -52,7 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
         refreshIcon()
 
-        session.onEvent = { [weak self] in self?.handle($0) }
+        session.onEvent = { [weak self] event in
+            self?.notch.handle(event)
+            self?.handle(event)
+        }
         hotkeys.onAction = { [weak self] action in
             guard let self else { return }
             switch action {

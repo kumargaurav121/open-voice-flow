@@ -43,6 +43,27 @@ with open(Path(dest) / "SHA256SUMS", "w") as sums:
             sums.write(f"{hashlib.sha256(f.read_bytes()).hexdigest()}  {f.name}\n")
 PY
 
+# whisperkittools needs `alignment_heads` (cross-attention heads used for word timestamps) to build the
+# decoder. Some fine-tunes ship it empty. For a turbo-architecture fine-tune (4 decoder layers) the heads
+# are turbo's; anything else must be fixed by hand rather than guessed. Checksums above are of the
+# unpatched source; the patch is recorded in ATTRIBUTION.md.
+PATCHED="$("$PY" - "$SOURCE_DIR" <<'PY'
+import json, sys
+from pathlib import Path
+src = Path(sys.argv[1])
+gen_path, cfg = src / "generation_config.json", json.loads((src / "config.json").read_text())
+gen = json.loads(gen_path.read_text())
+if gen.get("alignment_heads"):
+    print("")
+elif cfg.get("decoder_layers") == 4 and cfg.get("d_model") == 1280:
+    gen["alignment_heads"] = [[2, 4], [2, 11], [3, 3], [3, 6], [3, 11], [3, 14]]  # openai/whisper-large-v3-turbo
+    gen_path.write_text(json.dumps(gen, indent=2))
+    print("alignment_heads copied from openai/whisper-large-v3-turbo (empty in the source)")
+else:
+    sys.exit("generation_config.json has no alignment_heads and the architecture isn't turbo's; add them by hand")
+PY
+)"
+
 "$WORK/whisperkittools/.venv/bin/whisperkit-generate-model" --model-version "$SOURCE_DIR" --output-dir "$WORK/coreml"
 
 converted="$(find "$WORK/coreml" -mindepth 1 -maxdepth 1 -type d | head -1)"
@@ -67,6 +88,7 @@ cat > "$DEST/ATTRIBUTION.md" <<ATTR
 Core ML conversion of $SOURCE_MODEL at revision $SOURCE_REVISION
 (https://huggingface.co/$SOURCE_MODEL), licensed $LICENSE by its authors.
 Converted with argmaxinc/whisperkittools at $WHISPERKITTOOLS_REVISION.
-Source file checksums: SOURCE-SHA256SUMS.
+Source file checksums: SOURCE-SHA256SUMS (before any patch).
+${PATCHED:+Patched before conversion: $PATCHED.}
 ATTR
 echo "Installed to $DEST"

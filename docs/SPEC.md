@@ -41,7 +41,7 @@ Push-to-talk only. Very short presses (< ~250 ms) are ignored.
 3. **Clean up** with the configured LLM provider (default: Qwen3.5-2B 4-bit via MLX-Swift, local):
    - remove fillers ("um", "matlab", repeated words), fix punctuation/casing,
    - apply custom dictionary spellings,
-   - **script normalisation**: default output is Latin script (Devanagari → romanised Hinglish); setting to keep Devanagari,
+   - **script**: output is always English letters and Western digits (user requirement). The Hinglish model writes Roman script itself; a final guard transliterates any Devanagari or Arabic-script run that slips through (`LatinScriptSpeechToText`), leaving English text untouched. No Devanagari setting,
    - neutral style everywhere. **Skipped entirely** when the frontmost app is a code editor or terminal (bundle-ID list).
 4. **Insert**: AX direct insert where the focused element supports it, else clipboard paste (`⌘V`) with the previous clipboard restored afterwards — unless the user changed the clipboard in the meantime.
 
@@ -77,20 +77,23 @@ Each step has a timeout; failure at any step → error state naming the step.
 
 ### 4.5 Notch overlay
 
-Borderless, non-activating `NSPanel` at the top centre of the **active screen**, above the menu bar, on all Spaces. On notched displays it hugs and grows out of the notch; on non-notched displays it renders as a pill of the same shape at top centre.
+Borderless, non-activating `NSPanel` (never takes focus; on all Spaces and over full-screen apps) on the screen holding the focused window of the app being dictated into.
 
-States (one state machine, all transitions animated):
+- **MacBook (notched display):** the notch itself grows **down into a panel** (NotchNook-style). Its top corners flare into the menu bar through concave shoulders; the camera sits in the panel's top row, flanked by the target app (icon + name) and the mode chip (Hinglish / English). The body below shows the state.
+- **Other displays:** the **same panel** floats just below the menu bar, with fully rounded corners and a header row in place of the camera row.
 
-| State | Visual |
+States (one state machine; one spring drives size, corners and content: opening response 0.42 / damping 0.8, closing 0.45 / 1.0; Reduce Motion → fades):
+
+| State | Body |
 |---|---|
-| Idle | Invisible (just the hardware notch) |
-| Listening | Widens; live waveform; colour differs for Dictate vs Command |
-| Transcribing | Shimmer/spinner |
-| Inserted | Brief ✓, collapses |
-| Acting | Expands down: parsed command, then step list with ✓ / spinner, countdown |
-| Error | Short red message; click for details |
+| Idle | Hidden (collapses back into the notch / a small pill) |
+| Listening | Mic badge (orange, pulsing; command mode gets its own colour, ticket 11), scrolling live waveform, timer |
+| Transcribing | The same bars roll as a wave; "Transcribing" |
+| Inserted | Badge morphs into a green ✓, bars flatten, "Inserted"; collapses after 0.9 s |
+| Acting | (ticket 11) parsed command, step list, countdown |
+| Error | Red badge with a short shake, message in place of the waveform, "Details"; click expands the details, click "Close" dismisses |
 
-The dictation transcript is *not* previewed before insertion (speed first).
+`Esc` while `fn` is held cancels (it's a chord, see ticket 01); the keyboard tap is listen-only, so the focused app also receives the `Esc`. The dictation transcript is *not* previewed before insertion (speed first).
 
 ### 4.6 Custom dictionary
 
@@ -126,12 +129,12 @@ Swift packages, each depending only on those above it:
 
 ```
 Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter; LLMProvider and ActionAdapter arrive with tickets 05 and 11)
-Audio       Mic capture, silence trim, waveform levels
+Audio       Mic capture, silence trim, current input level
 STT         WhisperKit, FluidAudio/Parakeet, cloud providers
 LLM         MLX-Swift (Qwen), Ollama, cloud providers
 Insertion   AX insert, clipboard paste + restore
 Actions     Cancellable step runner with progress events; SlackAdapter
-NotchUI     Overlay panel, state machine, animations
+NotchUI     Overlay panel, state machine, geometry, waveform levels, animations
 App         Menu bar, hotkeys (CGEventTap), onboarding, settings, history, model downloads
 EvalRunner  Dev tool: runs Audio + STT over the eval clips for scripts/eval (not shipped)
 ```

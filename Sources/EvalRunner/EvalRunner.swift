@@ -26,12 +26,13 @@ struct EvalRunner {
         let manifest = try JSONDecoder().decode([ManifestRow].self, from: Data(contentsOf: clips.appending(path: "manifest.json")))
         guard let first = manifest.first else { throw RunnerError.usage("manifest is empty") }
 
-        let transcriber = WhisperKitTranscriber(model: model, modelsDirectory: SpeechModel.modelsDirectory)
+        let whisper = WhisperKitTranscriber(model: model, modelsDirectory: SpeechModel.modelsDirectory)
+        let transcriber = LatinScriptSpeechToText(wrapping: whisper)  // same as the app
         let trimmer = SilenceTrimmer()
         let clock = ContinuousClock()
 
         print("\(name): loading \(model)")
-        let loadTime = try await clock.measure { try await transcriber.prepare() }
+        let loadTime = try await clock.measure { try await whisper.prepare() }
         print("  loaded in \(loadTime)")
         _ = try await transcriber.transcribe(trimmer.trim(try loadClip(clips.appending(path: first.audio))), language: language) // warm-up
 
