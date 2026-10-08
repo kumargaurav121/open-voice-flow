@@ -9,9 +9,12 @@ from dataclasses import dataclass
 from .normalize import normalize
 from .script import sound_key
 
-# A non-English clip whose output shares fewer than this fraction of reference words
-# (script-agnostically) was almost certainly translated rather than transcribed.
+# A Hindi/Hinglish clip whose output shares fewer than this fraction of reference words
+# (script-agnostically) was translated into English rather than transcribed.
 TRANSLATION_OVERLAP = 0.3
+# An English clip is in the wrong language when most output words aren't in Latin script
+# (rendered as Hindi). Low overlap alone can't tell that from plain misrecognition.
+FOREIGN_SCRIPT_SHARE = 0.5
 
 
 @dataclass(frozen=True)
@@ -48,8 +51,10 @@ class _Tally:
         self.reference_words += len(reference)
 
     def score(self) -> Score:
-        words = self.reference_words or 1  # nothing to get wrong: report 0, not a crash
-        return Score(self.strict_edits / words, self.agnostic_edits / words, self.reference_words)
+        if not self.reference_words:
+            return Score(0, 0, 0)  # WER is undefined; reference_words == 0 tells the reader
+        words = self.reference_words
+        return Score(self.strict_edits / words, self.agnostic_edits / words, words)
 
 
 @dataclass(frozen=True)
@@ -76,9 +81,16 @@ def _keys(words: Iterable[str]) -> list[str]:
     return [sound_key(w) for w in words]
 
 
+def _is_latin(word: str) -> bool:
+    return all(ch.isascii() for ch in word)
+
+
 def _looks_translated(lang: str, reference: list[str], hypothesis: list[str]) -> bool:
-    if lang == "en" or not reference:
+    if not reference:
         return False
+    if lang == "en":
+        foreign = sum(not _is_latin(w) for w in hypothesis)
+        return bool(hypothesis) and foreign / len(hypothesis) > FOREIGN_SCRIPT_SHARE
     hyp_keys = set(_keys(hypothesis))
     shared = sum(key in hyp_keys for key in _keys(reference))
     return shared / len(reference) < TRANSLATION_OVERLAP

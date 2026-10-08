@@ -38,6 +38,14 @@ def _mlx_turbo(language: str | None) -> Callable[[], Transcribe]:
     return load
 
 
+# Pinned model revisions (ADR 0010): a repo changing upstream must not silently change what we test.
+REVISIONS = {
+    "Trelis/whisper-hinglish-preview": "eab1188fd2d0",
+    "Oriserve/Whisper-Hindi2Hinglish-Apex": "f3214eed20b4",
+    "Deepro713/whisper-large-v3-turbo-hinglish": "1296a060a990",
+}
+
+
 def _transformers(repo: str, prompt: Callable[[str], list[str] | None]) -> Callable[[], Transcribe]:
     """`prompt(item_lang)` gives the forced decoder prompt tokens, or None to let the model detect."""
 
@@ -48,9 +56,12 @@ def _transformers(repo: str, prompt: Callable[[str], list[str] | None]) -> Calla
 
         device = "mps" if torch.backends.mps.is_available() else "cpu"
         dtype = torch.float16 if device == "mps" else torch.float32  # fp16 is slow or unsupported on CPU
-        processor = WhisperProcessor.from_pretrained(repo)
-        # transformers' stubs mistype `.to(device)` on loaded models.
-        model: Any = WhisperForConditionalGeneration.from_pretrained(repo, torch_dtype=dtype)
+        revision = REVISIONS[repo]
+        processor = WhisperProcessor.from_pretrained(repo, revision=revision)
+        # safetensors only: pickle checkpoints can run code on load. transformers' stubs mistype `.to(device)`.
+        model: Any = WhisperForConditionalGeneration.from_pretrained(
+            repo, revision=revision, torch_dtype=dtype, use_safetensors=True, trust_remote_code=False
+        )
         model = model.to(device).eval()
         tokenizer = processor.tokenizer
 
@@ -84,6 +95,7 @@ def _transformers(repo: str, prompt: Callable[[str], list[str] | None]) -> Calla
 
 _TRELIS = "Trelis/whisper-hinglish-preview"
 _DEEPRO = "Deepro713/whisper-large-v3-turbo-hinglish"
+_ORISERVE = "Oriserve/Whisper-Hindi2Hinglish-Apex"  # turbo architecture (4 decoder layers), Roman-script output
 
 
 def _forced(language: str, *, mixedcode: bool) -> list[str]:
@@ -107,6 +119,9 @@ CONFIGS: dict[str, Config] = {
             _transformers(_TRELIS, lambda lang: _forced("en", mixedcode=False) if lang == "en" else _forced("hi", mixedcode=True)),
         ),
         Config("trelis-auto", "Trelis Hinglish, language detected", _transformers(_TRELIS, lambda _lang: None)),
+        Config("oriserve-auto", "Oriserve Hinglish Apex (turbo-sized, Roman output), language detected", _transformers(_ORISERVE, lambda _lang: None)),
+        Config("oriserve-hi", "Oriserve Hinglish Apex, hi forced", _transformers(_ORISERVE, lambda _lang: _forced("hi", mixedcode=False))),
+        Config("oriserve-en", "Oriserve Hinglish Apex, en forced", _transformers(_ORISERVE, lambda _lang: _forced("en", mixedcode=False))),
         Config("deepro-auto", "Deepro Hinglish fine-tune of turbo, language detected", _transformers(_DEEPRO, lambda _lang: None)),
     ]
 }

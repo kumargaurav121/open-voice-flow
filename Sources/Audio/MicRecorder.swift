@@ -4,7 +4,7 @@ import Core
 /// Records the default input device as 16 kHz mono, the format Whisper expects.
 @MainActor
 public final class MicRecorder: AudioRecorder {
-    public static let sampleRate = 16_000.0
+    public static let sampleRate = AudioClip.speechSampleRate
 
     private let engine = AVAudioEngine()
     private let trimmer = SilenceTrimmer()

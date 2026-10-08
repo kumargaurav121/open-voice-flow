@@ -115,7 +115,7 @@ Guided window with live ✓ per item:
 
 | Role | Default (local) | Alternatives |
 |---|---|---|
-| STT | `Trelis/whisper-hinglish-preview` converted to WhisperKit Core ML, published by this project on Hugging Face | Whisper large-v3-turbo (interim fallback until conversion exists); Parakeet via FluidAudio (English-only, faster); cloud BYOK (Deepgram, ElevenLabs, OpenAI) |
+| STT | Two modes from a picker: **Hinglish** (default) = `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, Roman-script output) converted by this project to WhisperKit Core ML from pinned weights; **English** = Whisper large-v3-turbo | Cloud BYOK (Deepgram, ElevenLabs, OpenAI); Parakeet via FluidAudio (English) |
 | LLM | Qwen3.5-2B 4-bit via MLX-Swift (4B when RAM allows) | Gemma 4 E2B; Ollama; cloud BYOK (Claude Haiku 4.5, OpenAI, Groq) |
 
 All settings are stored internally as a single `Mode` (STT provider + LLM provider + prompt + language/script), so multiple Modes later is a UI change only.
@@ -133,6 +133,7 @@ Insertion   AX insert, clipboard paste + restore
 Actions     Cancellable step runner with progress events; SlackAdapter
 NotchUI     Overlay panel, state machine, animations
 App         Menu bar, hotkeys (CGEventTap), onboarding, settings, history, model downloads
+EvalRunner  Dev tool: runs Audio + STT over the eval clips for scripts/eval (not shipped)
 ```
 
 - A **Session** = one hotkey press: start → audio → transcript → result (insert or action) → end. Future hands-free / conversational modes are new session kinds, not a rewrite.

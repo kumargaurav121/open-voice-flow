@@ -8,7 +8,7 @@ struct DictationSessionTests {
     let inserter = FakeInserter()
     let clock = FakeClock()
 
-    func makeSession(language: Language = .auto) -> DictationSession {
+    func makeSession(language: Language = .hinglish) -> DictationSession {
         DictationSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now, language: { language })
     }
 
@@ -156,13 +156,13 @@ struct DictationSessionTests {
 
     @Test func transcribesInTheSelectedLanguage() async {
         stt.transcript = "नमस्ते"
-        let session = makeSession(language: .hindi)
+        let session = makeSession(language: .english)
 
         session.keyDown()
         clock.advance(by: 1.0)
         await session.keyUp()
 
-        #expect(stt.requests.map(\.language) == [.hindi])
+        #expect(stt.requests.map(\.language) == [.english])
     }
 
     @Test func pressWhileACancelIsStillStoppingTheMicDoesNotStartRecording() async {

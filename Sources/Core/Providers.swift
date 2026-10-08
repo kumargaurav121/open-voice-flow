@@ -10,13 +10,17 @@ public struct AudioClip: Sendable, Equatable {
         self.sampleRate = sampleRate
     }
 
+    /// Whisper's input rate; recorders and loaders produce clips at this rate.
+    public static let speechSampleRate = 16_000.0
+
     public var duration: TimeInterval { Double(samples.count) / sampleRate }
     public var isEmpty: Bool { samples.isEmpty }
 }
 
-/// Spoken language hint passed to speech-to-text.
+/// What the user speaks. Hinglish covers English, Hindi and the two mixed; English-only trades
+/// Hindi support for better English accuracy.
 public enum Language: String, CaseIterable, Sendable {
-    case auto, english, hindi
+    case hinglish, english
 }
 
 @MainActor

@@ -83,3 +83,17 @@ def test_language_with_no_reference_words_scores_zero_instead_of_crashing() -> N
     report = score([item(1, "en", "...")], [Transcript(1, "", 1.0)])
 
     assert report.overall.strict_wer == 0
+
+
+def test_english_clips_turned_into_hindi_are_flagged_too() -> None:
+    items = [item(27, "en", "Tell Rohan the build is green and he can merge now.")]
+    transcripts = [Transcript(27, "बता रोहन बिल है ग्रीन और वो अब भी बैठ सकता है।", 1.0)]
+
+    assert score(items, transcripts).translated == [27]
+
+
+def test_empty_reference_with_extra_output_is_not_a_negative_score() -> None:
+    report = score([item(1, "en", "...")], [Transcript(1, "hello there friend", 1.0)])
+
+    assert report.overall.reference_words == 0
+    assert report.overall.strict_wer == 0

@@ -21,8 +21,12 @@ let package = Package(
         .target(name: "Insertion", dependencies: ["Core"]),
         // Menu-bar app: hotkeys, permissions, wiring.
         .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "Insertion"]),
+        // Runs the app's speech-to-text over the eval clips, for scoring with scripts/eval.
+        .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT"]),
 
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "AudioTests", dependencies: ["Audio"]),
+        .testTarget(name: "STTTests", dependencies: ["STT"]),
+        .testTarget(name: "EvalRunnerTests", dependencies: ["EvalRunner"]),
     ]
 )

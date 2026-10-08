@@ -96,7 +96,10 @@ def _strict_check(latin: dict[str, Report], devanagari: dict[str, Report]) -> st
 
 
 def report_markdown(reports: dict[str, Report], devanagari_reports: dict[str, Report], *, clips: int) -> str:
-    configs = "\n".join(f"- **{name}**: {CONFIGS[name].description}" for name in reports)
+    configs = "\n".join(
+        f"- **{name}**: {CONFIGS[name].description if name in CONFIGS else 'in-app run (Swift EvalRunner: silence trim + WhisperKit)'}"
+        for name in reports
+    )
     return f"""# STT bake-off, {date.today().isoformat()}
 
 {clips} clips from the personal eval set (see `docs/eval/reading-script.md`), scored against Latin-script references.
@@ -135,7 +138,8 @@ def main() -> None:
     run_parser = sub.add_parser("run", help="transcribe the eval clips with one or more configs")
     run_parser.add_argument("configs", nargs="+", choices=sorted(CONFIGS))
     score_parser = sub.add_parser("score", help="score saved transcripts")
-    score_parser.add_argument("configs", nargs="*", choices=sorted(CONFIGS))
+    # Any saved transcripts can be scored, incl. in-app runs from the Swift EvalRunner (e.g. app-trelis).
+    score_parser.add_argument("configs", nargs="*")
     score_parser.add_argument("--all", action="store_true", help="every config with saved transcripts")
     score_parser.add_argument("--devanagari", action="store_true", help="Devanagari references for pure-Hindi items")
     score_parser.add_argument("--report", type=Path, help="also write a markdown report here")
@@ -145,7 +149,11 @@ def main() -> None:
     if args.command == "run":
         run(args.configs)
     else:
-        names = [n for n in CONFIGS if (TRANSCRIPTS / f"{n}.json").exists()] if args.all else args.configs
+        saved = sorted(p.stem for p in TRANSCRIPTS.glob("*.json"))
+        names = saved if args.all else args.configs
+        missing = [n for n in names if n not in saved]
+        if missing:
+            parser.error(f"no saved transcripts for: {', '.join(missing)}")
         if not names:
             parser.error("no configs given and no saved transcripts found")
         score_command(names, devanagari=args.devanagari, report=args.report, force=args.force)

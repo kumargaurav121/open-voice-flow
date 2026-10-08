@@ -2,20 +2,23 @@ import Core
 import Foundation
 import WhisperKit
 
-/// Local speech-to-text with WhisperKit (Core ML). The model downloads on first use.
+/// Local speech-to-text with WhisperKit (Core ML).
 @MainActor
 public final class WhisperKitTranscriber: SpeechToText {
-    /// Interim default (ADR 0003): plain large-v3-turbo until the converted Hinglish model ships in ticket 03.
-    public static let defaultModel = "openai_whisper-large-v3-v20240930_turbo"
+    /// Hub name of the turbo fallback, downloaded on first use.
+    nonisolated static let turboModel = "openai_whisper-large-v3-v20240930_turbo"
 
+    public let model: SpeechModel
     private let engine: WhisperEngine
     private var loading: Task<Void, Error>?
 
-    public init(model: String = defaultModel, modelsDirectory: URL) {
+    /// - Parameter modelsDirectory: where hub models (turbo) are downloaded.
+    public init(model: SpeechModel, modelsDirectory: URL) {
+        self.model = model
         engine = WhisperEngine(model: model, modelsDirectory: modelsDirectory)
     }
 
-    /// Downloads (if needed) and loads the model. Safe to call more than once.
+    /// Loads (downloading turbo if needed) the model. Safe to call more than once.
     public func prepare() async throws {
         if loading == nil {
             let engine = engine
@@ -31,44 +34,64 @@ public final class WhisperKitTranscriber: SpeechToText {
 
     public func transcribe(_ clip: AudioClip, language: Language) async throws -> String {
         try await prepare()
-        return try await engine.transcribe(clip.samples, languageCode: language.whisperCode)
+        return try await engine.transcribe(clip.samples, setup: DecodingSetup(language: language, model: model))
     }
 }
 
 /// Owns the non-Sendable WhisperKit instance so it never crosses actors.
 private actor WhisperEngine {
-    private let model: String
+    private let model: SpeechModel
     private let modelsDirectory: URL
     private var whisper: WhisperKit?
 
-    init(model: String, modelsDirectory: URL) {
+    init(model: SpeechModel, modelsDirectory: URL) {
         self.model = model
         self.modelsDirectory = modelsDirectory
     }
 
     func load() async throws {
         guard whisper == nil else { return }
-        try FileManager.default.createDirectory(at: modelsDirectory, withIntermediateDirectories: true)
-        whisper = try await WhisperKit(WhisperKitConfig(
-            model: model,
-            downloadBase: modelsDirectory,
-            verbose: false,
-            logLevel: .error,
-            prewarm: true,
-            load: true,
-            download: true
-        ))
+        let config: WhisperKitConfig
+        switch model {
+        case .hinglish(let folder):
+            guard SpeechModel.isHinglishModelInstalled(at: folder) else {
+                throw WhisperKitTranscriberError.modelMissing(folder)
+            }
+            // The tokenizer comes from the model folder (written by scripts/convert-model.sh).
+            config = WhisperKitConfig(
+                modelFolder: folder.path,
+                tokenizerFolder: folder,
+                verbose: false,
+                logLevel: .error,
+                prewarm: true,
+                load: true,
+                download: false
+            )
+        case .turbo:
+            try FileManager.default.createDirectory(at: modelsDirectory, withIntermediateDirectories: true)
+            config = WhisperKitConfig(
+                model: WhisperKitTranscriber.turboModel,
+                downloadBase: modelsDirectory,
+                verbose: false,
+                logLevel: .error,
+                prewarm: true,
+                load: true,
+                download: true
+            )
+        }
+        whisper = try await WhisperKit(config)
     }
 
-    func transcribe(_ samples: [Float], languageCode: String?) async throws -> String {
+    func transcribe(_ samples: [Float], setup: DecodingSetup) async throws -> String {
         guard let loaded = whisper else { throw WhisperKitTranscriberError.notLoaded }
         // WhisperKit isn't Sendable. Only this actor touches it, but actor calls can interleave
         // across the await below; DictationSession never transcribes two clips at once.
         nonisolated(unsafe) let whisper = loaded
         let options = DecodingOptions(
             task: .transcribe,
-            language: languageCode,
-            detectLanguage: languageCode == nil,
+            language: setup.languageCode,
+            usePrefillCache: setup.usesPrefillCache,
+            detectLanguage: setup.languageCode == nil,
             skipSpecialTokens: true,
             withoutTimestamps: true
         )
@@ -79,15 +102,5 @@ private actor WhisperEngine {
 
 public enum WhisperKitTranscriberError: Error {
     case notLoaded
-}
-
-extension Language {
-    /// Whisper language code; nil lets the model detect it.
-    var whisperCode: String? {
-        switch self {
-        case .auto: nil
-        case .english: "en"
-        case .hindi: "hi"
-        }
-    }
+    case modelMissing(URL)
 }

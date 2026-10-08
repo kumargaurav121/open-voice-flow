@@ -17,13 +17,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let log = AppLog()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let hotkeys = HotkeyMonitor()
-    private let transcriber = WhisperKitTranscriber(modelsDirectory: AppDelegate.modelsDirectory)
+    // English mode runs turbo (best English); Hinglish mode runs the Hinglish model (bake-off, ticket 03).
+    private let englishModel = WhisperKitTranscriber(model: .turbo, modelsDirectory: SpeechModel.modelsDirectory)
+    private lazy var hinglishModel: WhisperKitTranscriber = {
+        let preferred = SpeechModel.preferredHinglish
+        return preferred == .turbo
+            ? englishModel
+            : WhisperKitTranscriber(model: preferred, modelsDirectory: SpeechModel.modelsDirectory)
+    }()
     private lazy var session = DictationSession(
         recorder: MicRecorder(),
-        speechToText: transcriber,
+        speechToText: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel]),
         inserter: PasteInserter(),
         now: { ProcessInfo.processInfo.systemUptime },
-        language: { [weak self] in self?.language ?? .auto }
+        language: { [weak self] in self?.language ?? .hinglish }
     )
 
     private var status = Status.loadingModel { didSet { refreshIcon() } }
@@ -32,12 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var permissionTimer: Timer?
 
     private var language: Language {
-        get { Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .auto }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: "language") }
-    }
-
-    static var modelsDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "open-voice-flow/models", directoryHint: .isDirectory)
+        get { Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .hinglish }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "language")
+            loadModel()  // the other language's model loads on first switch
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -63,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self?.refreshPermissions() }
         }
 
-        log.notice("Launched")
+        log.notice("Launched. English: \(englishModel.model), Hinglish: \(hinglishModel.model), selected: \(language)")
         loadModel()
     }
 
@@ -72,8 +78,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             do {
                 let started = ProcessInfo.processInfo.systemUptime
-                try await transcriber.prepare()
-                log.notice(String(format: "Speech model ready in %.1fs", ProcessInfo.processInfo.systemUptime - started))
+                let model = language == .english ? englishModel : hinglishModel
+                try await model.prepare()
+                log.notice(String(format: "Speech model for %@ ready in %.1fs", language.rawValue, ProcessInfo.processInfo.systemUptime - started))
                 status = .ready
             } catch {
                 log.error("Speech model failed to load: \(error)")
@@ -193,9 +200,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 private extension Language {
     var title: String {
         switch self {
-        case .auto: "Detect Automatically"
-        case .english: "English"
-        case .hindi: "Hindi"
+        case .hinglish: "Hinglish (English and Hindi)"
+        case .english: "English Only"
         }
     }
 }
