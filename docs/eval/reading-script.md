@@ -13,7 +13,7 @@ ffmpeg -f avfoundation -i ":0" -ac 1 -ar 16000 docs/eval/raw/reading-$(date +%Y%
 
 Recordings are personal data: `docs/eval/raw/` and `docs/eval/clips/` are git-ignored.
 
-Each item's **reference** is the text we expect as final output (Latin script by default). Pure-Hindi items also list a Devanagari reference for the Devanagari setting.
+Each item's **reference** is the text we expect as final output (Latin script by default). Pure-Hindi items also list a Devanagari reference, used by the scorer's `--devanagari` cross-check.
 
 ---
 

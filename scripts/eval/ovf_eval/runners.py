@@ -41,7 +41,7 @@ def _mlx_turbo(language: str | None) -> Callable[[], Transcribe]:
 # Pinned model revisions (ADR 0010): a repo changing upstream must not silently change what we test.
 REVISIONS = {
     "Trelis/whisper-hinglish-preview": "eab1188fd2d0",
-    "Oriserve/Whisper-Hindi2Hinglish-Apex": "f3214eed20b4",
+    "Oriserve/Whisper-Hindi2Hinglish-Apex": "f3214eed20b4e4d4144e739982d911f87b9cb223",
     "Deepro713/whisper-large-v3-turbo-hinglish": "1296a060a990",
 }
 

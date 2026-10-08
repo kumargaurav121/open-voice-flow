@@ -38,14 +38,12 @@ Push-to-talk only. Very short presses (< ~250 ms) are ignored.
 
 1. **Capture** mic audio (16 kHz mono) while key held; trim leading/trailing silence.
 2. **Transcribe** with the configured STT provider (default: Hinglish Whisper via WhisperKit, local).
-3. **Clean up** with the configured LLM provider (default: Qwen3.5-2B 4-bit via MLX-Swift, local):
-   - remove fillers ("um", "matlab", repeated words), fix punctuation/casing,
-   - apply custom dictionary spellings,
-   - **script**: output is always English letters and Western digits (user requirement). The Hinglish model writes Roman script itself; a final guard transliterates any Devanagari or Arabic-script run that slips through (`LatinScriptSpeechToText`), leaving English text untouched. No Devanagari setting,
-   - neutral style everywhere. **Skipped entirely** when the frontmost app is a code editor or terminal (bundle-ID list).
+3. **Clean up**, in two layers:
+   - **Rules, always** (~1 ms): hesitations (um, uh), stuttered English function words ("the the"), spacing and sentence capitalisation. Meaning-bearing words ("like", "so", "matlab") and Hindi reduplication ("jaldi jaldi") are left alone.
+   - **AI, opt-in** from the menu: *AI Cleanup: Off (default) / Fast (Qwen3-1.7B, ~0.6 s) / Thorough (Qwen3-4B-Instruct, ~1.3 s)*, a local MLX model that also removes fillers and false starts and fixes punctuation. Its rewrite is used only if `AICleanupGuard` confirms it deleted nothing but fillers (at punctuation boundaries) and nearby repeats, added no words and stayed in English letters; otherwise, and on timeout (4 s) or failure, the rules output is used and the reason is logged.
+   - **script**: output is always English letters and Western digits (user requirement). The Hinglish model writes Roman script itself; `LatinScriptSpeechToText` transliterates any Devanagari or Arabic-script run that slips through.
+   - Code editors and terminals (bundle-ID list) get the raw transcript: no cleanup at all.
 4. **Insert**: AX direct insert where the focused element supports it, else clipboard paste (`⌘V`) with the previous clipboard restored afterwards — unless the user changed the clipboard in the meantime.
-
-The cleanup step is optional (setting); if disabled or it fails/times out, the raw transcript is inserted.
 
 ### 4.3 Command pipeline
 
@@ -119,7 +117,7 @@ Guided window with live ✓ per item:
 | Role | Default (local) | Alternatives |
 |---|---|---|
 | STT | Two modes from a picker: **Hinglish** (default) = `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, Roman-script output) converted by this project to WhisperKit Core ML from pinned weights; **English** = Whisper large-v3-turbo | Cloud BYOK (Deepgram, ElevenLabs, OpenAI); Parakeet via FluidAudio (English) |
-| LLM | Qwen3.5-2B 4-bit via MLX-Swift (4B when RAM allows) | Gemma 4 E2B; Ollama; cloud BYOK (Claude Haiku 4.5, OpenAI, Groq) |
+| LLM | Cleanup: opt-in Fast = Qwen3-1.7B / Thorough = Qwen3-4B-Instruct (4-bit, MLX-Swift); intents (ticket 11) TBD | Gemma 4 E2B; Ollama; cloud BYOK (Claude Haiku 4.5, OpenAI, Groq) |
 
 All settings are stored internally as a single `Mode` (STT provider + LLM provider + prompt + language/script), so multiple Modes later is a UI change only.
 
@@ -128,7 +126,7 @@ All settings are stored internally as a single `Mode` (STT provider + LLM provid
 Swift packages, each depending only on those above it:
 
 ```
-Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter; LLMProvider and ActionAdapter arrive with tickets 05 and 11)
+Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter, TextCleaner; ActionAdapter arrives with ticket 11), cleanup rules and guard
 Audio       Mic capture, silence trim, current input level
 STT         WhisperKit, FluidAudio/Parakeet, cloud providers
 LLM         MLX-Swift (Qwen), Ollama, cloud providers
@@ -136,16 +134,16 @@ Insertion   AX insert, clipboard paste + restore
 Actions     Cancellable step runner with progress events; SlackAdapter
 NotchUI     Overlay panel, state machine, geometry, waveform levels, animations
 App         Menu bar, hotkeys (CGEventTap), onboarding, settings, history, model downloads
-EvalRunner  Dev tool: runs Audio + STT over the eval clips for scripts/eval (not shipped)
+EvalRunner  Dev tool: runs the app's pipeline (Audio + STT + cleanup) over the eval clips for scripts/eval (not shipped)
 ```
 
 - A **Session** = one hotkey press: start → audio → transcript → result (insert or action) → end. Future hands-free / conversational modes are new session kinds, not a rewrite.
-- Every step sits behind a protocol so it can be tested with fakes. A future hosted (paid) service is just another `SpeechToText` / `LLMProvider`.
+- Every step sits behind a protocol so it can be tested with fakes. A future hosted (paid) service is just another `SpeechToText` / `TextCleaner`.
 - Packages are added by the ticket that first needs them (NotchUI in 04, LLM in 05, Actions in 11) rather than created empty up front.
 
 ## 7. Quality targets
 
-- **Latency** (on the slowest team Mac, M1 baseline): key release → text inserted **< 1.5 s** for a 10 s utterance including cleanup; command → parsed command visible **< 2 s**.
+- **Latency** (on the slowest team Mac, M1 baseline): key release → text inserted **< 1.5 s** for a 10 s utterance with AI cleanup off (the default; Fast adds ~0.6 s, Thorough ~1.3 s); command → parsed command visible **< 2 s**.
 - **Accuracy**: tracked as WER on a personal eval set (§8); any model/prompt change must not regress it.
 
 ## 8. Evaluation set
@@ -158,5 +156,5 @@ EvalRunner  Dev tool: runs Audio + STT over the eval clips for scripts/eval (not
 ## 9. Open items to settle during implementation
 
 - Exact Core ML conversion settings for the Hinglish Whisper model and its real-world latency on M1.
-- Verify Qwen3.5-2B structured-output reliability for `send_message` on Hinglish input; step up to 4B if needed.
+- Verify structured-output reliability for `send_message` on Hinglish input (MLXGuidedGeneration; Qwen3-4B-Instruct is the starting point).
 - Slack AX tree details for reading `⌘K` results and the DM header (may vary by Slack version).

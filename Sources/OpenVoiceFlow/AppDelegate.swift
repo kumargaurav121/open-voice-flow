@@ -2,6 +2,7 @@ import AppKit
 import Audio
 import Core
 import Insertion
+import LLM
 import NotchUI
 import STT
 
@@ -33,8 +34,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     )
     private lazy var session = DictationSession(
         recorder: recorder,
-        // Always English letters and digits, whichever model or script (user requirement).
-        speechToText: LatinScriptSpeechToText(wrapping: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel])),
+        speechToText: CleanupSpeechToText(
+            // Always English letters and digits, whichever model or script (user requirement).
+            wrapping: LatinScriptSpeechToText(wrapping: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel])),
+            selectedAI: { [weak self] in self?.activeCleaner },
+            isCodeContext: { CodeContext.isCodeEditor(bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") },
+            timeout: .seconds(4),  // Thorough (4B) took up to 2.4 s on long eval clips
+            log: { [weak self] in self?.log.notice($0) }
+        ),
         inserter: PasteInserter(),
         now: { ProcessInfo.processInfo.systemUptime },
         language: { [weak self] in self?.language ?? .hinglish }
@@ -45,6 +52,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastMessage: String?
     private var permissionTimer: Timer?
 
+    /// One cleaner per installed model, created on first use.
+    private var cleaners: [CleanupMode: LLMCleaner] = [:]
+
+    private func cleaner(for mode: CleanupMode) -> LLMCleaner? {
+        if let existing = cleaners[mode] { return existing }
+        guard let folder = LLMCleaner.folder(for: mode), LLMCleaner.isInstalled(at: folder) else { return nil }
+        let created = LLMCleaner(folder: folder)
+        cleaners[mode] = created
+        return created
+    }
+
+    /// The cleaner the pipeline uses right now; nil when AI cleanup is off.
+    private var activeCleaner: LLMCleaner? { cleanupMode == .off ? nil : cleaner(for: cleanupMode) }
+
+    /// The menu's AI Cleanup choice. Only the selected model stays in memory.
+    private var cleanupMode: CleanupMode {
+        get { CleanupMode(storedValue: UserDefaults.standard.string(forKey: "cleanupMode")) }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "cleanupMode")
+            for (mode, cleaner) in cleaners where mode != newValue { cleaner.unload() }
+            loadCleaner()
+        }
+    }
+
+    private func loadCleaner() {
+        guard let cleaner = activeCleaner else { return }
+        let mode = cleanupMode
+        Task {
+            let started = ProcessInfo.processInfo.systemUptime
+            do {
+                try await cleaner.prepare()
+                log.notice(String(format: "AI cleanup (%@) ready in %.1fs", mode.rawValue, ProcessInfo.processInfo.systemUptime - started))
+            } catch {
+                log.error("AI cleanup (\(mode.rawValue)) failed to load: \(error)")
+            }
+        }
+    }
+
     private var language: Language {
         get { Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .hinglish }
         set {
@@ -54,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        LLMCleaner.configureGPU()
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
@@ -87,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         log.notice("Launched. English: \(englishModel.model), Hinglish: \(hinglishModel.model), selected: \(language)")
         loadModel()
+        loadCleaner()
     }
 
     private func loadModel() {
@@ -185,6 +232,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let languageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
         languageItem.submenu = languages
         menu.addItem(languageItem)
+        let cleanupModes = NSMenu()
+        for mode in CleanupMode.allCases {
+            let installed = mode == .off || cleaner(for: mode) != nil
+            let entry = item(installed ? mode.displayName : "\(mode.displayName) (not installed)") { [weak self] in
+                self?.cleanupMode = mode
+            }
+            entry.state = mode == cleanupMode ? .on : .off
+            entry.isEnabled = installed
+            cleanupModes.addItem(entry)
+        }
+        let cleanupItem = NSMenuItem(title: "AI Cleanup", action: nil, keyEquivalent: "")
+        cleanupItem.submenu = cleanupModes
+        menu.addItem(cleanupItem)
         menu.addItem(item("Set Globe Key to Do Nothing…") { SystemPermissions.openKeyboardSettings() })
 
         menu.addItem(.separator())

@@ -3,7 +3,7 @@
 # looks (ADR 0010: pinned revision, data-only download, checksums, attribution).
 #
 #   scripts/convert-model.sh <repo> <revision> <install-name> <license> [work-dir]
-#   scripts/convert-model.sh Oriserve/Whisper-Hindi2Hinglish-Apex f3214eed20b4 oriserve-hinglish Apache-2.0
+#   scripts/convert-model.sh Oriserve/Whisper-Hindi2Hinglish-Apex f3214eed20b4e4d4144e739982d911f87b9cb223 oriserve-hinglish Apache-2.0
 #
 # Needs ~10 GB free disk and Python 3.11 (via uv). whisperkittools generates the encoder/decoder inside its
 # tests, so they stay on, but run CPU-only (see below).

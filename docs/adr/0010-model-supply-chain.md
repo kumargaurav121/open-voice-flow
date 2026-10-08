@@ -1,6 +1,6 @@
 # 10. Model supply chain: only verifiable, pinned, data-only downloads
 
-Status: Accepted · 2026-10-08
+Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05)
 
 ## Context
 The app and its tooling download multi-GB models from Hugging Face and convert them with third-party
@@ -26,3 +26,14 @@ publishers can't be checked against their claimed source, and a repo can change 
 Slower to try new models (a conversion per candidate), but every shipped model is traceable to pinned,
 code-free source weights. Onboarding downloads (ticket 07) must verify checksums before installing, and
 our own published models must ship a checksum manifest.
+
+## Amendment (ticket 05)
+- **Pins are full 40-character commit SHAs** (`download-model.sh` refuses anything else).
+- **`*.jinja`** joins the allow-list: chat templates are rendered by the tokenizer, not executed.
+- **MLX LLM weights come prebuilt from `mlx-community`**, a deliberate exception to "convert ourselves":
+  it is the MLX project's own conversion org (hundreds of thousands of downloads), the files are plain
+  safetensors quantised from the named upstream model, and re-quantising them ourselves would add no
+  verification. They are still pinned, allow-listed and checksummed. Core ML models are still converted
+  by us.
+- `SOURCE-SHA256SUMS` records what was downloaded; verifying downloads against a published manifest is
+  onboarding's job (ticket 07).

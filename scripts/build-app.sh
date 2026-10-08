@@ -23,6 +23,13 @@ if [[ -z "$identity" ]]; then
   exit 1
 fi
 
+# MLX's GPU kernels (AI cleanup) are compiled by Xcode's on-demand Metal Toolchain.
+if ! xcrun metal -v >/dev/null 2>&1; then
+  echo "Xcode's Metal Toolchain is missing. Install it once with:" >&2
+  echo "  xcodebuild -downloadComponent MetalToolchain" >&2
+  exit 1
+fi
+
 swift build -c "$CONFIG" --product OpenVoiceFlow
 bin="$(swift build -c "$CONFIG" --show-bin-path)"
 
