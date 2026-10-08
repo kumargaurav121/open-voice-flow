@@ -9,6 +9,8 @@ public final class WhisperKitTranscriber: SpeechToText {
     nonisolated static let turboModel = "openai_whisper-large-v3-v20240930_turbo"
 
     public let model: SpeechModel
+    /// Where each transcription's time went (encode, decode, fallbacks), for the session log.
+    public var onBreakdown: (String) -> Void = { _ in }
     private let engine: WhisperEngine
     private var loading: Task<Void, Error>?
 
@@ -34,7 +36,9 @@ public final class WhisperKitTranscriber: SpeechToText {
 
     public func transcribe(_ clip: AudioClip, language: Language) async throws -> String {
         try await prepare()
-        return try await engine.transcribe(clip.samples, setup: DecodingSetup(language: language, model: model))
+        let (text, breakdown) = try await engine.transcribe(clip.samples, setup: DecodingSetup(language: language, model: model))
+        onBreakdown(breakdown)
+        return text
     }
 }
 
@@ -58,9 +62,17 @@ private actor WhisperEngine {
                 throw WhisperKitTranscriberError.modelMissing(folder)
             }
             // The tokenizer comes from the model folder (written by scripts/convert-model.sh).
+            // Neural Engine for encoder and decoder: on the GPU the encoder's fixed 30 s window cost ~2 s per
+            // clip, over the 1.5 s target. The first ANE load compiles once (minutes) and is then cached.
             config = WhisperKitConfig(
                 modelFolder: folder.path,
                 tokenizerFolder: folder,
+                computeOptions: ModelComputeOptions(
+                    melCompute: .cpuAndGPU,
+                    audioEncoderCompute: .cpuAndNeuralEngine,
+                    textDecoderCompute: .cpuAndNeuralEngine,
+                    prefillCompute: .cpuOnly
+                ),
                 verbose: false,
                 logLevel: .error,
                 prewarm: true,
@@ -80,9 +92,13 @@ private actor WhisperEngine {
             )
         }
         whisper = try await WhisperKit(config)
+        // The first inference after loading is slow (the Neural Engine sets up on first use); spend it on a
+        // second of silence now so the user's first dictation is as fast as the rest.
+        _ = try? await transcribe(Array(repeating: 0, count: Int(AudioClip.speechSampleRate)),
+                                  setup: DecodingSetup(language: .english, model: model))
     }
 
-    func transcribe(_ samples: [Float], setup: DecodingSetup) async throws -> String {
+    func transcribe(_ samples: [Float], setup: DecodingSetup) async throws -> (text: String, breakdown: String) {
         guard let loaded = whisper else { throw WhisperKitTranscriberError.notLoaded }
         // WhisperKit isn't Sendable. Only this actor touches it, but actor calls can interleave
         // across the await below; DictationSession never transcribes two clips at once.
@@ -96,7 +112,14 @@ private actor WhisperEngine {
             withoutTimestamps: true
         )
         let results = try await whisper.transcribe(audioArray: samples, decodeOptions: options)
-        return results.map(\.text).joined(separator: " ")
+        let text = results.map(\.text).joined(separator: " ")
+        guard let timings = results.first?.timings else { return (text, "") }
+        let breakdown = String(
+            format: "audio %.1fs encode %.2fs (%.0f runs) decode %.2fs (%.0f tokens, %.0f fallbacks, %.0f windows) pipeline %.2fs",
+            timings.inputAudioSeconds, timings.encoding, timings.totalEncodingRuns, timings.decodingLoop,
+            timings.totalDecodingLoops, timings.totalDecodingFallbacks, timings.totalDecodingWindows, timings.fullPipeline
+        )
+        return (text, breakdown)
     }
 }
 

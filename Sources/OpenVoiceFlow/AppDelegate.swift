@@ -72,6 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
+        // Hinglish mode falls back to the same turbo instance when the Hinglish model isn't installed.
+        for model in englishModel === hinglishModel ? [englishModel] : [englishModel, hinglishModel] {
+            let name = "\(model.model)"
+            model.onBreakdown = { [weak self] in self?.log.notice("STT \(name): \($0)") }
+        }
+
         SystemPermissions.requestMissing()
         refreshPermissions()
         // Permissions are granted in System Settings while we run; pick them up without a relaunch.

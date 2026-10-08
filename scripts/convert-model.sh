@@ -5,8 +5,8 @@
 #   scripts/convert-model.sh <repo> <revision> <install-name> <license> [work-dir]
 #   scripts/convert-model.sh Oriserve/Whisper-Hindi2Hinglish-Apex f3214eed20b4 oriserve-hinglish Apache-2.0
 #
-# Needs ~10 GB free disk and Python 3.11 (via uv). Default tests must stay on: whisperkittools
-# generates the encoder/decoder inside them.
+# Needs ~10 GB free disk and Python 3.11 (via uv). whisperkittools generates the encoder/decoder inside its
+# tests, so they stay on, but run CPU-only (see below).
 set -euo pipefail
 
 SOURCE_MODEL="$1"
@@ -46,8 +46,10 @@ PY
 # whisperkittools needs `alignment_heads` (cross-attention heads used for word timestamps) to build the
 # decoder. Some fine-tunes ship it empty. For a turbo-architecture fine-tune (4 decoder layers) the heads
 # are turbo's; anything else must be fixed by hand rather than guessed. Checksums above are of the
-# unpatched source; the patch is recorded in ATTRIBUTION.md.
-PATCHED="$("$PY" - "$SOURCE_DIR" <<'PY'
+# unpatched source (the patch goes into a fresh copy each run); the patch is recorded in ATTRIBUTION.md.
+CONVERT_DIR="$WORK/source-for-conversion"
+rm -rf "$CONVERT_DIR" && cp -R "$SOURCE_DIR" "$CONVERT_DIR"
+PATCHED="$("$PY" - "$CONVERT_DIR" <<'PY'
 import json, sys
 from pathlib import Path
 src = Path(sys.argv[1])
@@ -64,7 +66,22 @@ else:
 PY
 )"
 
-"$WORK/whisperkittools/.venv/bin/whisperkit-generate-model" --model-version "$SOURCE_DIR" --output-dir "$WORK/coreml"
+# whisperkittools' built-in tests load each model on the Neural Engine and benchmark it. On an M1 that
+# first-load compile can take an hour or wedge the system ANECompilerService, and it isn't needed to
+# produce the model. Run the tests (and their PSNR accuracy check) on the CPU and skip the benchmarks.
+"$PY" - "$CONVERT_DIR" "$WORK/coreml" <<'PY'
+import sys
+import coremltools as ct
+from argmaxtools import test_utils
+# Fail loudly if these internals move: silently falling back to the Neural Engine means an hour-long hang.
+assert hasattr(test_utils, "TEST_COMPUTE_UNIT") and hasattr(test_utils, "TEST_SKIP_SPEED_TESTS"), \
+    "whisperkittools test settings changed; update convert-model.sh"
+test_utils.TEST_COMPUTE_UNIT = ct.ComputeUnit.CPU_ONLY
+test_utils.TEST_SKIP_SPEED_TESTS = True
+from scripts.generate_model import cli
+sys.argv = ["whisperkit-generate-model", "--model-version", sys.argv[1], "--output-dir", sys.argv[2]]
+cli()
+PY
 
 converted="$(find "$WORK/coreml" -mindepth 1 -maxdepth 1 -type d | head -1)"
 for model in MelSpectrogram AudioEncoder TextDecoder; do
@@ -73,7 +90,8 @@ done
 
 rm -rf "$DEST" && mkdir -p "$DEST"
 cp -R "$converted/"*.mlmodelc "$DEST/"
-cp "$SOURCE_DIR/config.json" "$SOURCE_DIR/generation_config.json" "$DEST/" 2>/dev/null || true
+# The generation config the model was converted with (patched copy); everything else from the pristine source.
+cp "$SOURCE_DIR/config.json" "$CONVERT_DIR/generation_config.json" "$DEST/"
 
 # WhisperKit needs the model's own tokenizer.json, or it falls back to the stock one. Some repos ship
 # only the slow-tokenizer files, so build it from the pinned source.

@@ -17,3 +17,5 @@ Engine on an M1 Pro (80+ min) and took 7.9 s per clip on the GPU, against a 1.5 
 a **picker**: Hinglish mode runs `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, writes Roman
 Hinglish, 17.5% agnostic / 22.0% strict WER, no translations) with `<|en|>` forced; English mode runs
 stock turbo (7.0% English WER). Details: addendum in docs/eval/reports/2026-10-08-bakeoff.md.
+The Hinglish model runs on the Neural Engine (on the GPU its encoder cost ~2 s per clip). Consequence:
+its first load on a Mac compiles for ~15-16 min (M1 Pro), cached afterwards; onboarding must show it.

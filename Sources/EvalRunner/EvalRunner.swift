@@ -1,4 +1,3 @@
-import AVFoundation
 import Audio
 import Core
 import Foundation
@@ -24,9 +23,11 @@ struct EvalRunner {
         }
 
         let manifest = try JSONDecoder().decode([ManifestRow].self, from: Data(contentsOf: clips.appending(path: "manifest.json")))
-        guard let first = manifest.first else { throw RunnerError.usage("manifest is empty") }
+        guard !manifest.isEmpty else { throw RunnerError.usage("manifest is empty") }
 
         let whisper = WhisperKitTranscriber(model: model, modelsDirectory: SpeechModel.modelsDirectory)
+        var breakdown = ""
+        whisper.onBreakdown = { breakdown = $0 }
         let transcriber = LatinScriptSpeechToText(wrapping: whisper)  // same as the app
         let trimmer = SilenceTrimmer()
         let clock = ContinuousClock()
@@ -34,36 +35,22 @@ struct EvalRunner {
         print("\(name): loading \(model)")
         let loadTime = try await clock.measure { try await whisper.prepare() }
         print("  loaded in \(loadTime)")
-        _ = try await transcriber.transcribe(trimmer.trim(try loadClip(clips.appending(path: first.audio))), language: language) // warm-up
 
         var records: [TranscriptRecord] = []
         for row in manifest {
-            let clip = trimmer.trim(try loadClip(clips.appending(path: row.audio)))
+            let clip = trimmer.trim(try AudioFileLoader.load(clips.appending(path: row.audio)))
             var text = ""
             let elapsed = try await clock.measure { text = try await transcriber.transcribe(clip, language: language) }
             let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
             records.append(TranscriptRecord(id: row.id, text: text, seconds: seconds))
-            print(String(format: "  %02d %5.2fs (%4.1fs audio) %@", row.id, seconds, clip.duration, String(text.prefix(70))))
+            print(String(format: "  %02d %5.2fs (%4.1fs audio) %@", row.id, seconds, clip.duration, String(text.prefix(50))))
+            print("     \(breakdown)")
         }
 
         let output = clips.appending(path: "transcripts/\(name).json")
         try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
         try TranscriptsFile.encode(records).write(to: output)
         print("wrote \(output.path)")
-    }
-
-    /// Reads a clip as 16 kHz mono floats, the format the app's recorder produces.
-    static func loadClip(_ url: URL) throws -> AudioClip {
-        let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
-        guard file.processingFormat.sampleRate == AudioClip.speechSampleRate, file.processingFormat.channelCount == 1 else {
-            throw RunnerError.usage("\(url.lastPathComponent) must be 16 kHz mono (split.py writes that)")
-        }
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw RunnerError.usage("couldn't allocate a buffer for \(url.lastPathComponent)")
-        }
-        try file.read(into: buffer)
-        let samples = UnsafeBufferPointer(start: buffer.floatChannelData?[0], count: Int(buffer.frameLength))
-        return AudioClip(samples: Array(samples), sampleRate: AudioClip.speechSampleRate)
     }
 }
 
