@@ -9,6 +9,25 @@ public enum SessionEvent: Equatable, Sendable {
     case failed(SessionFailure)
 }
 
+/// A dictation's final text, for history. Reported whether or not it reached the app, so text that
+/// couldn't be inserted isn't lost.
+public struct SessionTranscript: Equatable, Sendable {
+    public var text: String
+    public var language: Language
+    /// The app in front when recording started.
+    public var app: String?
+    public var inserted: Bool
+    public var clip: AudioClip
+
+    public init(text: String, language: Language, app: String?, inserted: Bool, clip: AudioClip) {
+        self.text = text
+        self.language = language
+        self.app = app
+        self.inserted = inserted
+        self.clip = clip
+    }
+}
+
 public enum SessionFailure: Equatable, Sendable {
     case microphone
     case transcription

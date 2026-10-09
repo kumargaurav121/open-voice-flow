@@ -1,6 +1,7 @@
 import AppKit
 import Audio
 import Core
+import History
 import Insertion
 import LLM
 import ModelStore
@@ -36,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let downloader = ModelDownloader(transport: URLSessionTransport())
     private var onboarding: (window: OnboardingWindow, model: OnboardingModel)?
     private let dictionary = DictionaryStore()
+    private lazy var history = HistoryModel(store: try? HistoryStore())
+    private lazy var historyWindow = HistoryWindow(model: history)
     private lazy var dictionaryWindow = DictionaryWindow(store: dictionary)
     private let recorder = MicRecorder()
     private let inserter = Inserter()
@@ -60,7 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ),
         inserter: inserter,
         now: { ProcessInfo.processInfo.systemUptime },
-        language: { [weak self] in self?.language ?? .hinglish }
+        language: { [weak self] in self?.language ?? .hinglish },
+        frontmostApp: { NSWorkspace.shared.frontmostApplication?.localizedName }
     )
 
     private var status = Status.needsSetup { didSet { refreshIcon() } }
@@ -137,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         englishModel.onBreakdown = { [weak self] in self?.log.notice("STT turbo: \($0)") }
         inserter.onMethod = { [weak self] in self?.log.notice($0.description) }
+        session.onTranscript = { [weak self] in self?.record($0) }
 
         refreshPermissions()
         // Permissions are granted in System Settings while we run; pick them up without a relaunch.
@@ -157,6 +162,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             SystemPermissions.requestMissing()
         }
+    }
+
+    // MARK: History
+
+    private func record(_ transcript: SessionTranscript) {
+        do {
+            try history.record(transcript)
+        } catch {
+            log.error("Couldn't save to history: \(error.localizedDescription)")
+        }
+    }
+
+    private func recentMenu() -> NSMenuItem {
+        let recent = NSMenu()
+        do {
+            let entries = try history.recent(10)
+            if entries.isEmpty { recent.addItem(disabled("No dictations yet")) }
+            for entry in entries {
+                recent.addItem(recentItem(for: entry))
+            }
+        } catch {
+            recent.addItem(disabled("History couldn't be read"))
+            log.error("Couldn't read history: \(error.localizedDescription)")
+        }
+        recent.addItem(.separator())
+        recent.addItem(item("Show All History…") { [weak self] in self?.historyWindow.show() })
+        let recentItem = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
+        recentItem.submenu = recent
+        return recentItem
+    }
+
+    /// One line, at most 60 characters; click to copy.
+    private func recentItem(for entry: HistoryEntry) -> NSMenuItem {
+        let line = entry.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let title = line.count > 60 ? line.prefix(59) + "…" : line
+        let entryItem = item(entry.inserted ? title : "\(title) (not inserted)") { Clipboard.copy(entry.text) }
+        entryItem.toolTip = "Click to copy"
+        return entryItem
     }
 
     // MARK: Onboarding
@@ -309,6 +352,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(item("Retry Loading Model") { [weak self] in self?.loadModel() })
         }
         menu.addItem(item(onboardingComplete ? "Setup Guide…" : "Finish Setup…") { [weak self] in self?.showOnboarding() })
+
+        menu.addItem(.separator())
+        menu.addItem(recentMenu())
+        menu.addItem(item("History…") { [weak self] in self?.historyWindow.show() })
 
         menu.addItem(.separator())
         let languages = NSMenu()

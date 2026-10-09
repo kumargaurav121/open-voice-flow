@@ -32,12 +32,14 @@ let package = Package(
         .target(name: "ModelStore", dependencies: ["Core"]),
         // First-run onboarding: permissions, model downloads, first compile, try it.
         .target(name: "Onboarding", dependencies: ["Core", "ModelStore"]),
+        // Local transcript history (SQLite, the system library) and opt-in audio.
+        .target(name: "History", dependencies: ["Core"], linkerSettings: [.linkedLibrary("sqlite3")]),
         // Getting text into the focused app.
         .target(name: "Insertion", dependencies: ["Core"]),
         // The notch overlay: state machine, geometry, panel and views.
         .target(name: "NotchUI", dependencies: ["Core"]),
         // Menu-bar app: hotkeys, permissions, wiring.
-        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding"]),
+        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding", "History"]),
         // Runs the app's speech-to-text over the eval clips, for scoring with scripts/eval.
         .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT", "LLM"]),
 
@@ -49,5 +51,6 @@ let package = Package(
         .testTarget(name: "InsertionTests", dependencies: ["Insertion"]),
         .testTarget(name: "ModelStoreTests", dependencies: ["ModelStore"]),
         .testTarget(name: "OnboardingTests", dependencies: ["Onboarding"]),
+        .testTarget(name: "HistoryTests", dependencies: ["History"]),
     ]
 )

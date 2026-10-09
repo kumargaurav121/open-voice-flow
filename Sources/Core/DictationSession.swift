@@ -7,10 +7,12 @@ public final class DictationSession {
     public static let minimumPressDuration: TimeInterval = 0.25
 
     public var onEvent: (SessionEvent) -> Void = { _ in }
+    /// Each final transcript, inserted or not (history).
+    public var onTranscript: (SessionTranscript) -> Void = { _ in }
 
     private enum State {
         case idle
-        case recording(pressedAt: TimeInterval)
+        case recording(pressedAt: TimeInterval, app: String?)
         case processing
     }
 
@@ -19,6 +21,7 @@ public final class DictationSession {
     private let inserter: TextInserter
     private let now: () -> TimeInterval
     private let language: () -> Language
+    private let frontmostApp: () -> String?
     private var state = State.idle
 
     public init(
@@ -26,13 +29,15 @@ public final class DictationSession {
         speechToText: SpeechToText,
         inserter: TextInserter,
         now: @escaping () -> TimeInterval,
-        language: @escaping () -> Language
+        language: @escaping () -> Language,
+        frontmostApp: @escaping () -> String? = { nil }
     ) {
         self.recorder = recorder
         self.speechToText = speechToText
         self.inserter = inserter
         self.now = now
         self.language = language
+        self.frontmostApp = frontmostApp
     }
 
     public func keyDown() {
@@ -43,7 +48,7 @@ public final class DictationSession {
             onEvent(.failed(.microphone))
             return
         }
-        state = .recording(pressedAt: now())
+        state = .recording(pressedAt: now(), app: frontmostApp())
         onEvent(.listening)
     }
 
@@ -57,7 +62,7 @@ public final class DictationSession {
     }
 
     public func keyUp() async {
-        guard case .recording(let pressedAt) = state else { return }
+        guard case .recording(let pressedAt, let app) = state else { return }
         state = .processing
         defer { state = .idle }
 
@@ -73,9 +78,10 @@ public final class DictationSession {
         }
 
         onEvent(.transcribing)
+        let language = language()
         let text: String
         do {
-            text = try await speechToText.transcribe(clip, language: language())
+            text = try await speechToText.transcribe(clip, language: language)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             onEvent(.failed(.transcription))
@@ -91,12 +97,15 @@ public final class DictationSession {
             try await inserter.insert(text)
         } catch {
             onEvent(.failed(.insertion))
+            onTranscript(SessionTranscript(text: text, language: language, app: app, inserted: false, clip: clip))
             return
         }
+        // The notch hears first; saving to history comes after.
         onEvent(.inserted(SessionTimings(
             capture: releasedAt - pressedAt,
             transcribe: transcribedAt - releasedAt,
             insert: now() - transcribedAt
         )))
+        onTranscript(SessionTranscript(text: text, language: language, app: app, inserted: true, clip: clip))
     }
 }
