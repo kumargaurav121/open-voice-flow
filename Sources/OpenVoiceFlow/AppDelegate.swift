@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             : WhisperKitTranscriber(model: preferred, modelsDirectory: SpeechModel.modelsDirectory)
     }()
     private let recorder = MicRecorder()
+    private let inserter = Inserter()
     private lazy var notch = NotchController(
         currentDecibels: { [recorder] in recorder.currentDecibels },
         modeTitle: { [weak self] in (self?.language ?? .hinglish).displayName }
@@ -42,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             timeout: .seconds(4),  // Thorough (4B) took up to 2.4 s on long eval clips
             log: { [weak self] in self?.log.notice($0) }
         ),
-        inserter: PasteInserter(),
+        inserter: inserter,
         now: { ProcessInfo.processInfo.systemUptime },
         language: { [weak self] in self?.language ?? .hinglish }
     )
@@ -123,6 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let name = "\(model.model)"
             model.onBreakdown = { [weak self] in self?.log.notice("STT \(name): \($0)") }
         }
+
+        inserter.onMethod = { [weak self] in self?.log.notice($0.description) }
 
         SystemPermissions.requestMissing()
         refreshPermissions()

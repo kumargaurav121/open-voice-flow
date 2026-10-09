@@ -41,5 +41,6 @@ let package = Package(
         .testTarget(name: "STTTests", dependencies: ["STT"]),
         .testTarget(name: "EvalRunnerTests", dependencies: ["EvalRunner"]),
         .testTarget(name: "NotchUITests", dependencies: ["NotchUI"]),
+        .testTarget(name: "InsertionTests", dependencies: ["Insertion"]),
     ]
 )
