@@ -41,15 +41,23 @@ struct EvalRunner {
 
         let manifest = try JSONDecoder().decode([ManifestRow].self, from: Data(contentsOf: clips.appending(path: "manifest.json")))
         guard !manifest.isEmpty else { throw RunnerError.usage("manifest is empty") }
+        // --ids 3,6,8: only these clips (quick experiments).
+        let ids = args["--ids"].map { Set($0.split(separator: ",").compactMap { Int($0) }) }
 
         let whisper = WhisperKitTranscriber(model: model)
         var breakdown = ""
         whisper.onBreakdown = { breakdown = $0 }
         // Same pipeline as the app.
+        // --dictionary "Gurjeet,Supabase": the custom dictionary, as the app applies it.
+        let dictionary = args["--dictionary"].map { $0.split(separator: ",").map(String.init) } ?? []
         let cleaner = cleanupMode == .off ? nil : LLMCleaner(folder: llmFolder)
+        cleaner?.vocabulary = { dictionary }
         if let cleaner { try await cleaner.prepare() }
         let transcriber = CleanupSpeechToText(
-            wrapping: LatinScriptSpeechToText(wrapping: whisper), selectedAI: { cleaner },
+            // Same spell check as the app: real English words are never respelled.
+            wrapping: DictionarySpeechToText(wrapping: LatinScriptSpeechToText(wrapping: whisper), terms: { dictionary },
+                                             isEnglishWord: { EnglishWords.contains($0) }),
+            selectedAI: { cleaner },
             isCodeContext: { false }, timeout: .seconds(5),
             log: { print("     cleanup: \($0)") }
         )
@@ -61,7 +69,7 @@ struct EvalRunner {
         print("  loaded in \(loadTime)")
 
         var records: [TranscriptRecord] = []
-        for row in manifest {
+        for row in manifest where ids?.contains(row.id) ?? true {
             let clip = trimmer.trim(try AudioFileLoader.load(clips.appending(path: row.audio)))
             var text = ""
             let elapsed = try await clock.measure { text = try await transcriber.transcribe(clip, language: language) }

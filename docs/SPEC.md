@@ -95,7 +95,7 @@ States (one state machine; one spring drives size, corners and content: opening 
 
 ### 4.6 Custom dictionary
 
-Hand-edited list of words/names (e.g. "Gurjeet", product names). Used as an STT prompt hint (Whisper initial prompt) and as LLM cleanup context.
+Hand-edited list of words/names (e.g. "Gurjeet", product names), edited from the menu (Dictionary…; moves into Settings with ticket 10) and stored locally. After speech-to-text, anything that sounds like a term is respelled the user's way (both modes); the list is also LLM cleanup context. Not a Whisper prompt: the Hinglish model ignores it (ADR 0011).
 
 ### 4.7 History & privacy
 

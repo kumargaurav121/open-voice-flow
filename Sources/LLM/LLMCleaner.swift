@@ -34,6 +34,16 @@ public final class LLMCleaner: TextCleaner {
         }
     }
 
+    /// The user's dictionary, given to the model as spelling context.
+    public var vocabulary: () -> [String] = { [] }
+
+    /// The instructions, plus the dictionary's spellings when there are any.
+    static func instructions(vocabulary: [String]) -> String {
+        guard !vocabulary.isEmpty else { return instructions }
+        return instructions + "\nNames and terms the speaker uses; spell them exactly like this: "
+            + vocabulary.joined(separator: ", ") + ".\n"
+    }
+
     /// Still generating (e.g. after a timeout): a new cleanup is refused rather than run alongside it.
     public struct Busy: Error {}
 
@@ -89,7 +99,7 @@ public final class LLMCleaner: TextCleaner {
         // A fresh session per transcript: no history, so one dictation can't steer the next.
         let session = ChatSession(
             container,
-            instructions: Self.instructions,
+            instructions: Self.instructions(vocabulary: vocabulary()),
             generateParameters: GenerateParameters(maxTokens: max(32, text.count / 2), temperature: 0),
             additionalContext: ["enable_thinking": false]  // Qwen3 thinks by default
         )

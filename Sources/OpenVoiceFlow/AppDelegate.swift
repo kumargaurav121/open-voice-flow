@@ -35,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }()
     private let downloader = ModelDownloader(transport: URLSessionTransport())
     private var onboarding: (window: OnboardingWindow, model: OnboardingModel)?
+    private let dictionary = DictionaryStore()
+    private lazy var dictionaryWindow = DictionaryWindow(store: dictionary)
     private let recorder = MicRecorder()
     private let inserter = Inserter()
     private lazy var notch = NotchController(
@@ -45,7 +47,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recorder: recorder,
         speechToText: CleanupSpeechToText(
             // Always English letters and digits, whichever model or script (user requirement).
-            wrapping: LatinScriptSpeechToText(wrapping: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel])),
+            // The user's dictionary respells names before cleanup, so the AI sees them right too.
+            wrapping: DictionarySpeechToText(
+                wrapping: LatinScriptSpeechToText(wrapping: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel])),
+                terms: { [weak self] in self?.dictionary.terms ?? [] },
+                isEnglishWord: { EnglishWords.contains($0) }
+            ),
             selectedAI: { [weak self] in self?.activeCleaner },
             isCodeContext: { CodeContext.isCodeEditor(bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") },
             timeout: .seconds(4),  // Thorough (4B) took up to 2.4 s on long eval clips
@@ -68,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let existing = cleaners[mode] { return existing }
         guard let folder = LLMCleaner.folder(for: mode), LLMCleaner.isInstalled(at: folder) else { return nil }
         let created = LLMCleaner(folder: folder)
+        created.vocabulary = { [weak self] in self?.dictionary.terms ?? [] }
         cleaners[mode] = created
         return created
     }
@@ -325,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let cleanupItem = NSMenuItem(title: "AI Cleanup", action: nil, keyEquivalent: "")
         cleanupItem.submenu = cleanupModes
         menu.addItem(cleanupItem)
+        menu.addItem(item("Dictionary…") { [weak self] in self?.dictionaryWindow.show() })
         menu.addItem(item("Set Globe Key to Do Nothing…") { SystemPermissions.openKeyboardSettings() })
 
         menu.addItem(.separator())
