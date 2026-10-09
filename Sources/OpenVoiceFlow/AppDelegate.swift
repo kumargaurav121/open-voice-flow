@@ -3,12 +3,16 @@ import Audio
 import Core
 import Insertion
 import LLM
+import ModelStore
 import NotchUI
+import Onboarding
 import STT
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private enum Status: Equatable {
+        /// Models aren't downloaded yet; onboarding installs them.
+        case needsSetup
         case loadingModel
         case modelFailed
         case ready
@@ -20,13 +24,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let hotkeys = HotkeyMonitor()
     // English mode runs turbo (best English); Hinglish mode runs the Hinglish model (bake-off, ticket 03).
-    private let englishModel = WhisperKitTranscriber(model: .turbo, modelsDirectory: SpeechModel.modelsDirectory)
+    private let englishModel = WhisperKitTranscriber(model: .turbo)
+    // Created on first use, after onboarding has installed the models.
     private lazy var hinglishModel: WhisperKitTranscriber = {
         let preferred = SpeechModel.preferredHinglish
-        return preferred == .turbo
-            ? englishModel
-            : WhisperKitTranscriber(model: preferred, modelsDirectory: SpeechModel.modelsDirectory)
+        guard preferred != .turbo else { return englishModel }
+        let model = WhisperKitTranscriber(model: preferred)
+        model.onBreakdown = { [weak self] in self?.log.notice("STT \(preferred): \($0)") }
+        return model
     }()
+    private let downloader = ModelDownloader(transport: URLSessionTransport())
+    private var onboarding: (window: OnboardingWindow, model: OnboardingModel)?
     private let recorder = MicRecorder()
     private let inserter = Inserter()
     private lazy var notch = NotchController(
@@ -48,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         language: { [weak self] in self?.language ?? .hinglish }
     )
 
-    private var status = Status.loadingModel { didSet { refreshIcon() } }
+    private var status = Status.needsSetup { didSet { refreshIcon() } }
     private var permissions = SystemPermissions.current() { didSet { refreshIcon() } }
     private var lastMessage: String?
     private var permissionTimer: Timer?
@@ -119,27 +127,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        // Hinglish mode falls back to the same turbo instance when the Hinglish model isn't installed.
-        for model in englishModel === hinglishModel ? [englishModel] : [englishModel, hinglishModel] {
-            let name = "\(model.model)"
-            model.onBreakdown = { [weak self] in self?.log.notice("STT \(name): \($0)") }
-        }
-
+        englishModel.onBreakdown = { [weak self] in self?.log.notice("STT turbo: \($0)") }
         inserter.onMethod = { [weak self] in self?.log.notice($0.description) }
 
-        SystemPermissions.requestMissing()
         refreshPermissions()
         // Permissions are granted in System Settings while we run; pick them up without a relaunch.
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshPermissions() }
         }
 
-        log.notice("Launched. English: \(englishModel.model), Hinglish: \(hinglishModel.model), selected: \(language)")
-        loadModel()
+        log.notice("Launched. Models installed: \(modelsInstalled), onboarding complete: \(onboardingComplete), selected: \(language)")
+        // Also reopens when a model is missing, e.g. after an update pins a new model.
+        let needsOnboarding = !(onboardingComplete && modelsInstalled)
+        // Onboarding's Preparing step does the first (compiling) load itself; otherwise load now.
+        if modelsInstalled, !needsOnboarding || modelsPrepared {
+            loadModel()
+            loadCleaner()
+        }
+        if needsOnboarding {
+            showOnboarding()
+        } else {
+            SystemPermissions.requestMissing()
+        }
+    }
+
+    // MARK: Onboarding
+
+    private var onboardingComplete: Bool {
+        get { UserDefaults.standard.bool(forKey: "onboardingComplete") }
+        set { UserDefaults.standard.set(newValue, forKey: "onboardingComplete") }
+    }
+
+    private var modelsInstalled: Bool { BuiltInModels.all.allSatisfy(downloader.isInstalled) }
+
+    /// The pinned model revisions, recorded once their first (slow, compiling) load has completed.
+    private var modelsSignature: String { BuiltInModels.all.map { "\($0.id)@\($0.revision)" }.joined(separator: ",") }
+
+    private var modelsPrepared: Bool { UserDefaults.standard.string(forKey: "preparedModels") == modelsSignature }
+
+    private func showOnboarding() {
+        if let onboarding {
+            onboarding.window.show()
+            return
+        }
+        let model = OnboardingModel(
+            services: OnboardingServices(
+                permissions: { SystemPermissions.current() },
+                request: { SystemPermissions.request($0) },
+                downloadModels: { [downloader] progress in try await downloader.installAll(BuiltInModels.all, progress: progress) },
+                prepareModels: { [weak self] in try await self?.prepareForOnboarding() },
+                markComplete: { [weak self] in self?.onboardingComplete = true }
+            ),
+            modelsInstalled: modelsInstalled,
+            modelsPrepared: modelsPrepared
+        )
+        let window = OnboardingWindow(model: model)
+        model.onFinished = { [weak self, weak window] in
+            window?.close()
+            self?.onboarding = nil
+            self?.log.notice("Onboarding complete")
+        }
+        onboarding = (window, model)
+        window.show()
+    }
+
+    /// Loads both speech models (the slow first compile) and the selected AI cleanup model.
+    private func prepareForOnboarding() async throws {
+        status = .loadingModel
+        let started = ProcessInfo.processInfo.systemUptime
+        do {
+            try await englishModel.prepare()
+            try await hinglishModel.prepare()
+        } catch {
+            status = .modelFailed
+            log.error("Speech models failed to load during onboarding: \(error)")
+            throw error
+        }
+        log.notice(String(format: "Speech models prepared in %.1fs", ProcessInfo.processInfo.systemUptime - started))
+        UserDefaults.standard.set(modelsSignature, forKey: "preparedModels")
+        status = .ready
         loadCleaner()
     }
 
     private func loadModel() {
+        guard modelsInstalled else {
+            status = .needsSetup
+            return
+        }
         status = .loadingModel
         Task {
             do {
@@ -171,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             status = .transcribing
         case .inserted(let t):
             status = .ready
+            onboarding?.model.dictationSucceeded()
             lastMessage = String(format: "Last dictation: text in %.1f s", t.transcribe + t.insert)
             log.notice(String(format: "Inserted. capture %.2fs transcribe %.2fs insert %.2fs", t.capture, t.transcribe, t.insert))
         case .ignored(let reason):
@@ -196,6 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             (symbol, label) = ("exclamationmark.triangle", "Open Voice Flow needs permissions")
         } else {
             (symbol, label) = switch status {
+            case .needsSetup: ("arrow.down.circle", "Open Voice Flow needs setting up")
             case .loadingModel: ("arrow.down.circle", "Loading speech model")
             case .modelFailed: ("exclamationmark.triangle", "Speech model failed to load")
             case .ready: ("waveform", "Open Voice Flow")
@@ -224,6 +300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if status == .modelFailed {
             menu.addItem(item("Retry Loading Model") { [weak self] in self?.loadModel() })
         }
+        menu.addItem(item(onboardingComplete ? "Setup Guide…" : "Finish Setup…") { [weak self] in self?.showOnboarding() })
 
         menu.addItem(.separator())
         let languages = NSMenu()
@@ -257,7 +334,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusLine: String {
         if let warning = permissions.warning { return warning }
         return switch status {
-        case .loadingModel: "Loading speech model. First launch downloads about 1.6 GB."
+        case .needsSetup: "Finish setup to start dictating."
+        case .loadingModel: "Loading speech model"
         case .modelFailed: "Speech model failed to load"
         case .ready: "Ready. Hold fn to dictate."
         case .listening: "Listening"

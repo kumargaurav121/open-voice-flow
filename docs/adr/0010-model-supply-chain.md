@@ -37,3 +37,20 @@ our own published models must ship a checksum manifest.
   by us.
 - `SOURCE-SHA256SUMS` records what was downloaded; verifying downloads against a published manifest is
   onboarding's job (ticket 07).
+
+## Amendment (ticket 07)
+- **The manifest is built into the app.** `scripts/make-manifests.py` generates
+  `Sources/ModelStore/BuiltInModels.swift`: every model's repo, full commit SHA, and each file's size and
+  SHA-256 (LFS hashes from the Hugging Face API, small files hashed at the pinned revision). Onboarding
+  verifies every file before moving it into place; a mismatch deletes that model's whole download and
+  installs nothing from it. Each installed model gets `ATTRIBUTION.md` and `SOURCE-SHA256SUMS` (written by
+  the app unless the model ships its own).
+- **Allow-list for Core ML models:** compiled `*.mlmodelc/*` contents (`coremldata.bin`, `model.mil`,
+  `model.mlmodel`, `metadata.json`, `weights/weight.bin`) are model data, not code, and are allowed for
+  Core ML repos only: Argmax's turbo (the existing exception) and our own conversion.
+- **Turbo's tokenizer** comes from `openai/whisper-large-v3` (OpenAI's official repo, Apache-2.0), pinned at
+  `06f233fe06e710322aca913c1bc4249a0d71fce1`, tokenizer JSON files only; the same files WhisperKit used to
+  fetch itself, now pinned and checksummed.
+- **Our published model:** `kumargaurav9013/whisper-hindi2hinglish-apex-coreml` at
+  `f1cc87f9820d55650413305d00218343cb1d0da6`, with `ATTRIBUTION.md`, `LICENSE` (Apache-2.0),
+  `SOURCE-SHA256SUMS`, a model card disclosing the alignment-heads patch, and `SHA256SUMS` of every file.

@@ -42,7 +42,7 @@ struct EvalRunner {
         let manifest = try JSONDecoder().decode([ManifestRow].self, from: Data(contentsOf: clips.appending(path: "manifest.json")))
         guard !manifest.isEmpty else { throw RunnerError.usage("manifest is empty") }
 
-        let whisper = WhisperKitTranscriber(model: model, modelsDirectory: SpeechModel.modelsDirectory)
+        let whisper = WhisperKitTranscriber(model: model)
         var breakdown = ""
         whisper.onBreakdown = { breakdown = $0 }
         // Same pipeline as the app.

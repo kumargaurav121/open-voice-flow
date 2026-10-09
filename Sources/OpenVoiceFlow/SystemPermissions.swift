@@ -27,6 +27,23 @@ enum SystemPermissions {
         }
     }
 
+    /// The system prompt while macOS still offers one (first ask), otherwise the System Settings pane.
+    static func request(_ permission: Permission) {
+        switch permission {
+        case .microphone where AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { _ in }
+            return
+        case .accessibility:
+            // Adds the app to the Accessibility list (switched off) so there's a switch to turn on.
+            _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        case .inputMonitoring:
+            _ = CGRequestListenEventAccess()
+        default:
+            break
+        }
+        openSettings(for: permission)
+    }
+
     static func openSettings(for permission: Permission) {
         let pane = switch permission {
         case .microphone: "Privacy_Microphone"

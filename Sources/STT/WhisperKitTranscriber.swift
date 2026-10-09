@@ -5,22 +5,18 @@ import WhisperKit
 /// Local speech-to-text with WhisperKit (Core ML).
 @MainActor
 public final class WhisperKitTranscriber: SpeechToText {
-    /// Hub name of the turbo fallback, downloaded on first use.
-    nonisolated static let turboModel = "openai_whisper-large-v3-v20240930_turbo"
-
     public let model: SpeechModel
     /// Where each transcription's time went (encode, decode, fallbacks), for the session log.
     public var onBreakdown: (String) -> Void = { _ in }
     private let engine: WhisperEngine
     private var loading: Task<Void, Error>?
 
-    /// - Parameter modelsDirectory: where hub models (turbo) are downloaded.
-    public init(model: SpeechModel, modelsDirectory: URL) {
+    public init(model: SpeechModel) {
         self.model = model
-        engine = WhisperEngine(model: model, modelsDirectory: modelsDirectory)
+        engine = WhisperEngine(model: model)
     }
 
-    /// Loads (downloading turbo if needed) the model. Safe to call more than once.
+    /// Loads the installed model. Safe to call more than once.
     public func prepare() async throws {
         if loading == nil {
             let engine = engine
@@ -45,12 +41,10 @@ public final class WhisperKitTranscriber: SpeechToText {
 /// Owns the non-Sendable WhisperKit instance so it never crosses actors.
 private actor WhisperEngine {
     private let model: SpeechModel
-    private let modelsDirectory: URL
     private var whisper: WhisperKit?
 
-    init(model: SpeechModel, modelsDirectory: URL) {
+    init(model: SpeechModel) {
         self.model = model
-        self.modelsDirectory = modelsDirectory
     }
 
     func load() async throws {
@@ -80,15 +74,19 @@ private actor WhisperEngine {
                 download: false
             )
         case .turbo:
-            try FileManager.default.createDirectory(at: modelsDirectory, withIntermediateDirectories: true)
+            // Installed by onboarding from pinned, checksummed files (ADR 0010); never fetched here.
+            let folder = SpeechModel.turboFolder
+            guard FileManager.default.fileExists(atPath: folder.appending(path: "AudioEncoder.mlmodelc").path) else {
+                throw WhisperKitTranscriberError.modelMissing(folder)
+            }
             config = WhisperKitConfig(
-                model: WhisperKitTranscriber.turboModel,
-                downloadBase: modelsDirectory,
+                modelFolder: folder.path,
+                tokenizerFolder: SpeechModel.turboTokenizerFolder,
                 verbose: false,
                 logLevel: .error,
                 prewarm: true,
                 load: true,
-                download: true
+                download: false
             )
         }
         whisper = try await WhisperKit(config)
@@ -123,7 +121,14 @@ private actor WhisperEngine {
     }
 }
 
-public enum WhisperKitTranscriberError: Error {
+public enum WhisperKitTranscriberError: LocalizedError {
     case notLoaded
     case modelMissing(URL)
+
+    public var errorDescription: String? {
+        switch self {
+        case .notLoaded: "The speech model isn't loaded"
+        case .modelMissing(let folder): "The speech model isn't installed (\(folder.lastPathComponent))"
+        }
+    }
 }

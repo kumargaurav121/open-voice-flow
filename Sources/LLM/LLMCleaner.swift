@@ -3,6 +3,7 @@ import Foundation
 import MLX
 import MLXLLM
 import MLXLMCommon
+import ModelStore
 
 /// The optional AI cleanup: a small local LLM (Qwen3, 4-bit, via MLX) removes fillers and fixes
 /// punctuation and casing. Its output still has to pass `AICleanupGuard` before it's used.
@@ -24,14 +25,13 @@ public final class LLMCleaner: TextCleaner {
         Output: Meeting at 3 pm is confirmed.
         """
 
-    /// Where scripts/download-model.sh installs each mode's model.
+    /// Each mode's model folder, as installed by onboarding from the pinned manifests (ModelStore).
     public static func folder(for mode: CleanupMode) -> URL? {
-        let name: String? = switch mode {
+        switch mode {
         case .off: nil
-        case .fast: "qwen3-1.7b-4bit"            // mlx-community/Qwen3-1.7B-4bit @ 3b1b1768f8f8cf8351c712464f906e86c2b8269e
-        case .thorough: "qwen3-4b-instruct-2507-4bit"  // mlx-community/Qwen3-4B-Instruct-2507-4bit @ 50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b
+        case .fast: BuiltInModels.cleanupFast.installedFolder
+        case .thorough: BuiltInModels.cleanupThorough.installedFolder
         }
-        return name.map { URL.applicationSupportDirectory.appending(path: "open-voice-flow/models/\($0)", directoryHint: .isDirectory) }
     }
 
     /// Still generating (e.g. after a timeout): a new cleanup is refused rather than run alongside it.
@@ -45,7 +45,7 @@ public final class LLMCleaner: TextCleaner {
     /// Bumped by `unload()`, so a load that finishes afterwards is discarded instead of reinstated.
     private var generation = 0
 
-    /// - Parameter folder: the model's local folder (downloaded and pinned by scripts/download-model.sh).
+    /// - Parameter folder: the model's local folder (see `folder(for:)`).
     public init(folder: URL) {
         self.folder = folder
     }

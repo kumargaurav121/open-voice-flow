@@ -1,23 +1,21 @@
 import Core
 import Foundation
+import ModelStore
 
 /// Which speech model to run.
 public enum SpeechModel: Sendable, Equatable {
     /// Oriserve Hinglish Whisper (turbo-sized, Roman-script output), converted by us; loaded from a local folder.
     case hinglish(folder: URL)
-    /// Stock Whisper large-v3-turbo from Argmax's hub repo: English mode, and Hinglish mode's fallback
-    /// until the Hinglish model is installed.
+    /// Stock Whisper large-v3-turbo, Argmax's Core ML build: English mode, and Hinglish mode's fallback
+    /// until the Hinglish model is installed. Installed by onboarding with the whisper-large-v3 tokenizer.
     case turbo
 
-    public static var modelsDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "open-voice-flow/models", directoryHint: .isDirectory)
-    }
+    // Folders come from the pinned manifests onboarding installs (ModelStore).
+    public static var turboFolder: URL { BuiltInModels.whisperTurbo.installedFolder }
+    public static var turboTokenizerFolder: URL { BuiltInModels.whisperTurboTokenizer.installedFolder }
+    public static var hinglishFolder: URL { BuiltInModels.hinglish.installedFolder }
 
-    public static var hinglishFolder: URL {
-        modelsDirectory.appending(path: "oriserve-hinglish", directoryHint: .isDirectory)
-    }
-
-    /// Model for Hinglish mode: the Hinglish model once installed (onboarding, ticket 07), turbo until then.
+    /// Model for Hinglish mode: the Hinglish model once installed, turbo until then.
     public static var preferredHinglish: SpeechModel {
         isHinglishModelInstalled(at: hinglishFolder) ? .hinglish(folder: hinglishFolder) : .turbo
     }
