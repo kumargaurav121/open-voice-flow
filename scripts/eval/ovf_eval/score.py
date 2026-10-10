@@ -46,8 +46,8 @@ class _Tally:
     reference_words: int = 0
 
     def add(self, reference: list[str], hypothesis: list[str]) -> None:
-        self.strict_edits += _edits(reference, hypothesis)
-        self.agnostic_edits += _edits(_keys(reference), _keys(hypothesis))
+        self.strict_edits += edits(reference, hypothesis)
+        self.agnostic_edits += edits(sound_keys(reference), sound_keys(hypothesis))
         self.reference_words += len(reference)
 
     def score(self) -> Score:
@@ -66,7 +66,7 @@ class Report:
     translated: list[int]
 
 
-def _edits(reference: Sequence[str], hypothesis: Sequence[str]) -> int:
+def edits(reference: Sequence[str], hypothesis: Sequence[str]) -> int:
     """Word-level Levenshtein distance."""
     previous = list(range(len(hypothesis) + 1))
     for i, ref in enumerate(reference, 1):
@@ -77,7 +77,7 @@ def _edits(reference: Sequence[str], hypothesis: Sequence[str]) -> int:
     return previous[-1]
 
 
-def _keys(words: Iterable[str]) -> list[str]:
+def sound_keys(words: Iterable[str]) -> list[str]:
     return [sound_key(w) for w in words]
 
 
@@ -91,8 +91,8 @@ def _looks_translated(lang: str, reference: list[str], hypothesis: list[str]) ->
     if lang == "en":
         foreign = sum(not _is_latin(w) for w in hypothesis)
         return bool(hypothesis) and foreign / len(hypothesis) > FOREIGN_SCRIPT_SHARE
-    hyp_keys = set(_keys(hypothesis))
-    shared = sum(key in hyp_keys for key in _keys(reference))
+    hyp_keys = set(sound_keys(hypothesis))
+    shared = sum(key in hyp_keys for key in sound_keys(reference))
     return shared / len(reference) < TRANSLATION_OVERLAP
 
 

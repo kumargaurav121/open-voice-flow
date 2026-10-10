@@ -3,6 +3,7 @@
   ovf-eval run turbo-auto trelis-hi-mixed      # writes docs/eval/clips/transcripts/<config>.json
   ovf-eval score turbo-auto trelis-hi-mixed    # prints a comparison table
   ovf-eval score --all --report docs/eval/reports/2026-10-08-bakeoff.md
+  ovf-eval intents app-commands                # parsed commands (EvalRunner --commands) vs expected parses
 """
 
 import argparse
@@ -12,6 +13,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from .intents import MAX_TEXT_WER, Expected, Parsed, score_intents
 from .runners import CONFIGS
 from .score import Item, Report, Transcript, score
 
@@ -132,6 +134,24 @@ def score_command(names: list[str], *, devanagari: bool, report: Path | None, fo
         print(f"\nwrote {report}")
 
 
+def intents_command(name: str) -> None:
+    references = json.loads((EVAL / "references.json").read_text())
+    expected = [Expected(r["id"], r["expected_parse"]["app"], r["expected_parse"]["to"], r["expected_parse"]["text"])
+                for r in references if r.get("expected_parse")]
+    path = TRANSCRIPTS / f"{name}.intents.json"
+    if not path.exists():
+        raise SystemExit(f"no parsed commands at {path} (run EvalRunner --commands --name {name})")
+    parsed = [Parsed(r["id"], r.get("intent"), r["seconds"]) for r in json.loads(path.read_text())]
+    results = score_intents(expected, parsed)
+    print("| Clip | Strict | Lenient | Text WER | Seconds |\n|---|---|---|---|---|")
+    for r in results:
+        seconds = f"{r.seconds:.2f}" if r.seconds is not None else "-"
+        lenient = "pass" if r.ok else "FAIL: " + r.reason
+        print(f"| {r.id} | {'pass' if r.strict else 'fail'} | {lenient} | {r.text_wer:.0%} | {seconds} |")
+    print(f"\nstrict: {sum(r.strict for r in results)}/{len(results)} exact; "
+          f"lenient: {sum(r.ok for r in results)}/{len(results)} with text within {MAX_TEXT_WER:.0%} WER")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ovf-eval")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -144,12 +164,16 @@ def main() -> None:
     score_parser.add_argument("--devanagari", action="store_true", help="Devanagari references for pure-Hindi items")
     score_parser.add_argument("--report", type=Path, help="also write a markdown report here")
     score_parser.add_argument("--force", action="store_true", help="overwrite an existing report")
+    intents_parser = sub.add_parser("intents", help="score parsed commands against the expected parses")
+    intents_parser.add_argument("name")
     args = parser.parse_args()
 
     if args.command == "run":
         run(args.configs)
+    elif args.command == "intents":
+        intents_command(args.name)
     else:
-        saved = sorted(p.stem for p in TRANSCRIPTS.glob("*.json"))
+        saved = sorted(p.stem for p in TRANSCRIPTS.glob("*.json") if not p.name.endswith(".intents.json"))
         names = saved if args.all else args.configs
         missing = [n for n in names if n not in saved]
         if missing:

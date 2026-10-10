@@ -32,7 +32,7 @@ Live/streaming transcription, hands-free sessions, conversational agent, multipl
 | Command | hold Right `⌥` | Record while held; on release → transcribe → parse intent → run action |
 | Cancel | `Esc` | Cancel recording, processing, or a running action at any step |
 
-Push-to-talk only. Very short presses (< ~250 ms) are ignored. In Settings → General, Dictate and Command can each be any of fn, Right ⌥, Right ⌘, Right ⌃, Right ⇧ (held alone, so they never type or clash with app shortcuts); the two must differ. Cancel isn't rebindable: Esc, or any other key pressed while a hotkey is held. The Command key is stored but does nothing until commands arrive (ticket 11).
+Push-to-talk only. Very short presses (< ~250 ms) are ignored. In Settings → General, Dictate and Command can each be any of fn, Right ⌥, Right ⌘, Right ⌃, Right ⇧ (held alone, so they never type or clash with app shortcuts); the two must differ. Cancel isn't rebindable: Esc, or any other key pressed while a hotkey is held.
 
 ### 4.2 Dictation pipeline
 
@@ -47,13 +47,13 @@ Push-to-talk only. Very short presses (< ~250 ms) are ignored. In Settings → G
 
 ### 4.3 Command pipeline
 
-1. Capture + transcribe as above (with cleanup applied to the message text).
-2. **Parse intent** with the LLM using constrained/structured output into one of the known actions:
+1. Capture + transcribe as above, with the dictionary, English letters and the rules cleanup, but **no AI cleanup** (it would add up to ~1.3 s, could reword the command itself, and would send it to the cloud with Cloud cleanup on). Deepgram still applies if chosen for speech-to-text. Esc cancels until the result is shown.
+2. **Parse intent**: direct phrasings by rule ("Message Gurjeet saying …", "Send a message to Priya on Slack: …", "Gurjeet ko message karo ki …"), instant and exact; anything else (reported speech like "Tell Rohan he can merge", "Priya ko bolo ki … jaaye") by the local LLM (Qwen3-1.7B, on this Mac, never the cloud) as JSON validated against the schema (not grammar-constrained): invalid, a recipient the speaker didn't name, or any other app means unknown, and the message gets the dictation text rules. Accuracy and timing: docs/eval/reports/2026-10-10-commands.md (1.7B: under 2 s, lenient 4/5; the 4B: 5/5 but over 3 s). The model loads while the key is held. The structured output is:
    ```
    send_message(app: "slack", to: String, text: String)
    ```
    The LLM only extracts the *name as spoken*; it never resolves people.
-3. Notch shows the parsed command: `→ Slack · Gurjeet · "I'll be late"`.
+3. Notch shows the parsed command in the Command colour: `→ Slack · Gurjeet · "I'll be late"`. Until the adapter exists (ticket 12) the message text is copied to the clipboard. Commands are saved to history with what they did.
 4. **Run the adapter** (§4.4), streaming step progress to the notch.
 5. Unknown / unparseable command → notch: "Can't do that yet", transcript copied to the clipboard. Never fall back to typing it.
 
@@ -85,10 +85,10 @@ States (one state machine; one spring drives size, corners and content: opening 
 | State | Body |
 |---|---|
 | Idle | Hidden (collapses back into the notch / a small pill) |
-| Listening | Mic badge (orange, pulsing; command mode gets its own colour, ticket 11), scrolling live waveform, timer |
+| Listening | Mic badge (orange, pulsing; cyan for a command), scrolling live waveform, timer |
 | Transcribing | The same bars roll as a wave; "Transcribing" |
 | Inserted | Badge morphs into a green ✓, bars flatten, "Inserted"; collapses after 0.9 s |
-| Acting | (ticket 11) parsed command, step list, countdown |
+| Command | Cyan: parsed command (`→ Slack · Gurjeet · "…"`) or "Can't do that yet", with "Copied"; 3 s, then closes. Steps and countdown come with the adapter (ticket 12) |
 | Error | Red badge with a short shake, message in place of the waveform, "Details"; click expands the details, click "Close" dismisses |
 
 `Esc` while `fn` is held cancels (it's a chord, see ticket 01); the keyboard tap is listen-only, so the focused app also receives the `Esc`. The dictation transcript is *not* previewed before insertion (speed first).
@@ -119,7 +119,7 @@ Guided window, one step at a time. It opens on first launch and whenever a pinne
 | Role | Default (local) | Alternatives |
 |---|---|---|
 | STT | Two modes from a picker: **Hinglish** (default) = `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, Roman-script output) converted by this project to WhisperKit Core ML from pinned weights; **English** = Whisper large-v3-turbo | **Cloud BYOK (ticket 10): Deepgram Nova-3**. Later: ElevenLabs, OpenAI; Parakeet via FluidAudio (English) |
-| LLM | Cleanup: opt-in Fast = Qwen3-1.7B / Thorough = Qwen3-4B-Instruct (4-bit, MLX-Swift); intents (ticket 11) TBD | **Cloud BYOK (ticket 10): OpenAI-compatible, OpenAI or Groq**, as AI Cleanup "Cloud". Later: Claude Haiku 4.5; Gemma 4 E2B; Ollama |
+| LLM | Cleanup: opt-in Fast = Qwen3-1.7B / Thorough = Qwen3-4B-Instruct (4-bit, MLX-Swift); intents (ticket 11): rules first, then local Qwen3-1.7B | **Cloud BYOK (ticket 10): OpenAI-compatible, OpenAI or Groq**, as AI Cleanup "Cloud". Later: Claude Haiku 4.5; Gemma 4 E2B; Ollama |
 
 Settings are stored as a single `Mode` value: language, AI cleanup choice, STT provider, cloud LLM (service + model) and hotkeys, as versioned, leniently decoded JSON (unknown values fall back to defaults; settings from before Modes were migrated). The cleanup prompt is shared (`CleanupPrompt`), not per Mode yet. App-wide settings stay outside the Mode: dictionary, audio retention, onboarding state. API keys live only in the Keychain (`APIKeys`), never in preferences or logs; logs record a provider's status code, never its message. So multiple Modes later is a UI change only.
 
@@ -128,7 +128,7 @@ Settings are stored as a single `Mode` value: language, AI cleanup choice, STT p
 Swift packages, each depending only on those above it:
 
 ```
-Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter, TextCleaner; ActionAdapter arrives with ticket 11), cleanup rules and guard
+Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter, TextCleaner, CommandModel; ActionAdapter arrives with ticket 12), PushToTalkSession, command rules and schema, cleanup rules and guard
 Audio       Mic capture, silence trim, current input level
 STT         WhisperKit (local); FluidAudio/Parakeet later
 LLM         MLX-Swift (Qwen), local; Ollama later

@@ -15,6 +15,17 @@ public enum TriggerKey: String, Codable, CaseIterable, Sendable {
         case .rightShift: "Right ⇧ Shift"
         }
     }
+
+    /// Short form for tight spaces (the Recent menu).
+    public var symbol: String {
+        switch self {
+        case .fn: "fn"
+        case .rightOption: "⌥"
+        case .rightCommand: "⌘"
+        case .rightControl: "⌃"
+        case .rightShift: "⇧"
+        }
+    }
 }
 
 extension TriggerKey {

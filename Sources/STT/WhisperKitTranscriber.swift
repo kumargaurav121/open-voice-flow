@@ -99,7 +99,7 @@ private actor WhisperEngine {
     func transcribe(_ samples: [Float], setup: DecodingSetup) async throws -> (text: String, breakdown: String) {
         guard let loaded = whisper else { throw WhisperKitTranscriberError.notLoaded }
         // WhisperKit isn't Sendable. Only this actor touches it, but actor calls can interleave
-        // across the await below; DictationSession never transcribes two clips at once.
+        // across the await below; PushToTalkSession never transcribes two clips at once.
         nonisolated(unsafe) let whisper = loaded
         let options = DecodingOptions(
             task: .transcribe,

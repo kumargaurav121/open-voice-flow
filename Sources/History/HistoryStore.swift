@@ -14,6 +14,9 @@ public struct HistoryEntry: Identifiable, Equatable, Sendable {
     public let inserted: Bool
     /// The recording, when audio retention was on.
     public let audio: URL?
+    public let kind: SessionKind
+    /// For a command, what it did.
+    public let outcome: String?
 }
 
 /// Transcripts kept on this Mac only: an SQLite file plus, if the user opts in, each dictation's audio as a
@@ -33,7 +36,8 @@ public final class HistoryStore {
     }
 
     /// Bumped (with a migration in `migrate()`) whenever the table changes.
-    static let schemaVersion: Int32 = 1
+    /// 1: dictations. 2: adds commands (kind, outcome).
+    static let schemaVersion: Int32 = 2
     /// The window shows this many of the newest entries; search covers the whole history.
     public static let pageSize = 500
 
@@ -62,10 +66,23 @@ public final class HistoryStore {
 
     private func migrate() throws {
         let statement = try prepare("PRAGMA user_version")
-        defer { sqlite3_finalize(statement) }
         let version = sqlite3_step(statement) == SQLITE_ROW ? sqlite3_column_int(statement, 0) : 0
+        sqlite3_finalize(statement)  // before changing the schema
         guard version < Self.schemaVersion else { return }
-        try execute("""
+        // All or nothing: a migration that stops halfway would fail the same way on every launch.
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try migrate(from: version)
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+
+    private func migrate(from version: Int32) throws {
+        if version < 1 {
+            try execute("""
             CREATE TABLE IF NOT EXISTS entries (
                 id INTEGER PRIMARY KEY,
                 date REAL NOT NULL,
@@ -76,6 +93,11 @@ public final class HistoryStore {
                 audio TEXT
             )
             """)
+        }
+        if version < 2 {
+            try execute("ALTER TABLE entries ADD COLUMN kind TEXT NOT NULL DEFAULT 'dictation'")
+            try execute("ALTER TABLE entries ADD COLUMN outcome TEXT")
+        }
         try execute("PRAGMA user_version = \(Self.schemaVersion)")
     }
 
@@ -95,7 +117,9 @@ public final class HistoryStore {
             }
         }
         do {
-            let statement = try prepare("INSERT INTO entries (date, text, app, language, inserted, audio) VALUES (?, ?, ?, ?, ?, ?)")
+            let statement = try prepare("""
+                INSERT INTO entries (date, text, app, language, inserted, audio, kind, outcome) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """)
             defer { sqlite3_finalize(statement) }
             sqlite3_bind_double(statement, 1, date.timeIntervalSince1970)
             bind(transcript.text, to: statement, at: 2)
@@ -103,6 +127,8 @@ public final class HistoryStore {
             bind(transcript.language.rawValue, to: statement, at: 4)
             sqlite3_bind_int(statement, 5, transcript.inserted ? 1 : 0)
             bind(audioName, to: statement, at: 6)
+            bind(transcript.kind.rawValue, to: statement, at: 7)
+            bind(transcript.outcome, to: statement, at: 8)
             guard sqlite3_step(statement) == SQLITE_DONE else { throw failure("couldn't save") }
         } catch {
             if let audioName { try? FileManager.default.removeItem(at: audioFolder.appending(path: audioName)) }
@@ -110,13 +136,14 @@ public final class HistoryStore {
         }
         return HistoryEntry(id: sqlite3_last_insert_rowid(database), date: date, text: transcript.text, app: transcript.app,
                             language: transcript.language, inserted: transcript.inserted,
-                            audio: audioName.map { audioFolder.appending(path: $0) })
+                            audio: audioName.map { audioFolder.appending(path: $0) },
+                            kind: transcript.kind, outcome: transcript.outcome)
     }
 
     /// Newest first; `query` matches any part of the text, ignoring case.
     public func entries(matching query: String = "", limit: Int = HistoryStore.pageSize) throws -> [HistoryEntry] {
         let statement = try prepare("""
-            SELECT id, date, text, app, language, inserted, audio FROM entries
+            SELECT id, date, text, app, language, inserted, audio, kind, outcome FROM entries
             WHERE text LIKE ? ESCAPE '\\' ORDER BY date DESC, id DESC LIMIT ?
             """)
         defer { sqlite3_finalize(statement) }
@@ -136,7 +163,9 @@ public final class HistoryStore {
                 app: string(statement, 3),
                 language: Language(rawValue: string(statement, 4) ?? "") ?? .hinglish,
                 inserted: sqlite3_column_int(statement, 5) != 0,
-                audio: string(statement, 6).map { audioFolder.appending(path: $0) }
+                audio: string(statement, 6).map { audioFolder.appending(path: $0) },
+                kind: SessionKind(rawValue: string(statement, 7) ?? "") ?? .dictation,
+                outcome: string(statement, 8)
             ))
         }
         return entries

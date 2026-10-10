@@ -14,6 +14,10 @@ uv run pytest && uv run mypy ovf_eval tests
 
 New recording? Split it first with `split.py` (see `docs/eval/reading-script.md`).
 
+**Commands** (ticket 11): `swift run -c release EvalRunner --name app-commands --model-folder <path> --commands`
+runs clips 24-28 through the command parser and writes `<name>.intents.json`; `uv run ovf-eval intents
+app-commands` scores them against `expected_parse` (strict: exact words; lenient: within 25% WER).
+
 **Scores.** WER is corpus-level (total edits / total reference words) after normalising case,
 punctuation, contractions and numbers ("11.30" = "eleven thirty"). *Agnostic* WER also treats a
 Hindi word in Devanagari and its romanisation as the same word, so it measures what the model heard;

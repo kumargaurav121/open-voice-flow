@@ -71,15 +71,25 @@ public final class LLMCleaner: TextCleaner {
     }
 
     public func clean(_ text: String) async throws -> String {
+        try await respond(to: text, instructions: CleanupPrompt.instructions(vocabulary: vocabulary()),
+                          maxTokens: max(32, text.count / 2))
+    }
+
+    /// One reply in a fresh session: no history, so one dictation or command can't steer the next.
+    /// `waitIfBusy`: wait (up to 3 s) for a generation in progress, e.g. the warm-up, instead of refusing.
+    private func respond(to text: String, instructions: String, maxTokens: Int, waitIfBusy: Bool = false) async throws -> String {
+        if waitIfBusy {
+            let deadline = ContinuousClock.now + .seconds(3)
+            while generating, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        }
         guard !generating else { throw Busy() }
         generating = true
         defer { generating = false }
         let container = try await loadedContainer()
-        // A fresh session per transcript: no history, so one dictation can't steer the next.
         let session = ChatSession(
             container,
-            instructions: CleanupPrompt.instructions(vocabulary: vocabulary()),
-            generateParameters: GenerateParameters(maxTokens: max(32, text.count / 2), temperature: 0),
+            instructions: instructions,
+            generateParameters: GenerateParameters(maxTokens: maxTokens, temperature: 0),
             additionalContext: ["enable_thinking": false]  // Qwen3 thinks by default
         )
         let reply = try await session.respond(to: text)
@@ -115,8 +125,13 @@ public final class LLMCleaner: TextCleaner {
     }
 
     /// Qwen3 may still emit an empty <think></think> block with thinking off.
-    static func stripThinking(_ reply: String) -> String {
-        reply.replacingOccurrences(of: #"(?s)<think>.*?</think>"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    static func stripThinking(_ reply: String) -> String { ModelReply.strippingThinking(reply) }
+}
+
+extension LLMCleaner: CommandModel {
+    /// Turns a command the rules didn't recognise into the JSON `CommandSchema` checks.
+    public func reply(to command: String, instructions: String) async throws -> String {
+        // A command pressed while the model warms up waits for it rather than coming back "not understood".
+        try await respond(to: "Command: \(command)", instructions: instructions, maxTokens: max(120, command.count), waitIfBusy: true)
     }
 }

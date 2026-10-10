@@ -198,7 +198,11 @@ private struct HistoryRow: View {
                     if let app = entry.app { Text("·"); Text(app) }
                     Text("·")
                     Text(entry.language.displayName)
-                    if !entry.inserted {
+                    if entry.kind == .command {
+                        Label(entry.outcome ?? "Command", systemImage: "command")
+                            .foregroundStyle(.cyan)
+                            .lineLimit(1)
+                    } else if !entry.inserted {
                         Label("Not inserted", systemImage: "exclamationmark.circle")
                             .foregroundStyle(.orange)
                     }

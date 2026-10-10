@@ -5,8 +5,22 @@ import Foundation
 public struct NotchStateMachine: Sendable {
     public enum Mode: Sendable, Equatable {
         case dictation
-        /// Reserved for the command hotkey (ticket 11); gets its own colour.
+        /// The command hotkey; gets its own colour.
         case command
+    }
+
+    /// What a command came to, shown in the Command colour.
+    public enum CommandResult: Sendable, Equatable {
+        case parsed(CommandIntent)
+        /// "Can't do that yet" (the transcript went to the clipboard).
+        case unknown
+
+        public var text: String {
+            switch self {
+            case .parsed(let intent): intent.summary
+            case .unknown: CommandIntent.unknownSummary
+            }
+        }
     }
 
     public enum Phase: Sendable, Equatable {
@@ -14,6 +28,7 @@ public struct NotchStateMachine: Sendable {
         case listening(Mode)
         case transcribing
         case inserted
+        case command(CommandResult)
         /// `expanded` once clicked: shows `NotchError.details` under the message.
         case error(NotchError, expanded: Bool)
     }
@@ -34,6 +49,8 @@ public struct NotchStateMachine: Sendable {
     public static let insertedHold: TimeInterval = 0.9
     /// Long enough to read a 3-4 word message.
     public static let errorHold: TimeInterval = 3
+    /// Long enough to read who and what.
+    public static let commandHold: TimeInterval = 3
     public static let expandedErrorHold: TimeInterval = 10
 
     public private(set) var phase = Phase.idle
@@ -46,8 +63,14 @@ public struct NotchStateMachine: Sendable {
         // Any new session event supersedes a pending collapse (e.g. pressing again during the ✓).
         if case .session = input { timerToken += 1 }
         switch input {
-        case .session(.listening):
-            phase = .listening(.dictation)
+        case .session(.listening(let kind)):
+            phase = .listening(kind == .command ? .command : .dictation)
+        case .session(.commandParsed(let intent)):
+            phase = .command(.parsed(intent))
+            return scheduleReturn(after: Self.commandHold)
+        case .session(.commandUnknown):
+            phase = .command(.unknown)
+            return scheduleReturn(after: Self.commandHold)
         case .session(.transcribing):
             phase = .transcribing
         case .session(.inserted):

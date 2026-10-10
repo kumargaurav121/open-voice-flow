@@ -10,3 +10,9 @@ LLM → structured intent → per-app scripted adapter that drives the real app 
 
 ## Consequences
 Works without API tokens; fully visible. Brittle to app UI changes — adapters need per-version maintenance. An agent-loop fallback and official-API adapters are roadmap items.
+
+## Amendment (ticket 11)
+The LLM's output is only ever an intent for the adapter, never text typed into an app: an unknown
+command shows "Can't do that yet" and puts the transcript on the clipboard. The recipient must be a name
+the speaker actually said, so a hallucinated or injected name can't reach the adapter.
+

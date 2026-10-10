@@ -55,23 +55,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         currentDecibels: { [recorder] in recorder.currentDecibels },
         modeTitle: { [weak self] in (self?.language ?? .hinglish).displayName }
     )
-    private lazy var session = DictationSession(
+    /// Speech to text plus the dictionary and English letters: what dictation and commands share.
+    private lazy var transcription: SpeechToText = DictionarySpeechToText(
+        // Always English letters and digits, whichever model or script (user requirement).
+        wrapping: LatinScriptSpeechToText(wrapping: SelectedSpeechToText(
+            local: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel]),
+            // Only called when chosen in Settings; falls back to this Mac if it fails.
+            cloud: DeepgramSpeechToText(apiKey: { [weak self] in try self?.keys.key(for: .deepgram) },
+                                        keyterms: { [weak self] in self?.dictionary.terms ?? [] }),
+            provider: { [weak self] in self?.modes.mode.speech ?? .local },
+            log: { [weak self] in self?.log.notice($0) }
+        )),
+        // Respells names before cleanup, so the AI sees them right too.
+        terms: { [weak self] in self?.dictionary.terms ?? [] },
+        isEnglishWord: { EnglishWords.contains($0) }
+    )
+    private lazy var session = PushToTalkSession(
         recorder: recorder,
         speechToText: CleanupSpeechToText(
-            // Always English letters and digits, whichever model or script (user requirement).
-            // The user's dictionary respells names before cleanup, so the AI sees them right too.
-            wrapping: DictionarySpeechToText(
-                wrapping: LatinScriptSpeechToText(wrapping: SelectedSpeechToText(
-                    local: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel]),
-                    // Only called when chosen in Settings; falls back to this Mac if it fails.
-                    cloud: DeepgramSpeechToText(apiKey: { [weak self] in try self?.keys.key(for: .deepgram) },
-                                                keyterms: { [weak self] in self?.dictionary.terms ?? [] }),
-                    provider: { [weak self] in self?.modes.mode.speech ?? .local },
-                    log: { [weak self] in self?.log.notice($0) }
-                )),
-                terms: { [weak self] in self?.dictionary.terms ?? [] },
-                isEnglishWord: { EnglishWords.contains($0) }
-            ),
+            wrapping: transcription,
             selectedAI: { [weak self] in self?.activeCleaner },
             isCodeContext: { CodeContext.isCodeEditor(bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") },
             timeout: .seconds(4),  // Thorough (4B) took up to 2.4 s on long eval clips
@@ -80,8 +82,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         inserter: inserter,
         now: { ProcessInfo.processInfo.systemUptime },
         language: { [weak self] in self?.language ?? .hinglish },
-        frontmostApp: { NSWorkspace.shared.frontmostApplication?.localizedName }
+        frontmostApp: { NSWorkspace.shared.frontmostApplication?.localizedName },
+        commands: CommandParser(model: { [weak self] in self?.commandModel }, log: { [weak self] in self?.log.notice($0) }),
+        // Commands get the rules cleanup but never AI cleanup: it would add seconds, could reword the
+        // command itself, and would send it to the cloud when Cloud cleanup is on.
+        commandSpeechToText: CleanupSpeechToText(wrapping: transcription, selectedAI: { nil }, isCodeContext: { false },
+                                                 timeout: .seconds(4), log: { _ in })
     )
+    /// When the command key was released, for the "parsed in under 2 s" target.
+    private var commandReleasedAt: TimeInterval?
+
+    /// Commands the rules don't recognise are parsed on this Mac, never in the cloud. The 1.7B model keeps
+    /// them under 2 s after release (eval: 1.7-1.8 s; the 4B took 2.7-2.9 s); the 4B if that's all there is.
+    private var commandModel: LLMCleaner? { cleaner(for: .fast) ?? cleaner(for: .thorough) }
 
     private var status = Status.needsSetup { didSet { refreshIcon() } }
     private var permissions = SystemPermissions.current() { didSet { refreshIcon() } }
@@ -118,7 +131,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// The menu's (and Settings') AI Cleanup choice. Only the selected local model stays in memory.
+    /// The menu's (and Settings') AI Cleanup choice. Only the selected local model stays in memory, plus
+    /// the 1.7B once a command has needed it.
     private var cleanupMode: CleanupMode {
         get { modes.mode.cleanup }
         set { modes.mode.cleanup = newValue }
@@ -147,7 +161,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func modeChanged(from old: Mode, to new: Mode) {
         if new.language != old.language { loadModel() }  // the other language's model loads on first switch
         if new.cleanup != old.cleanup {
-            for (mode, cleaner) in cleaners where mode != new.cleanup { cleaner.unload() }
+            // The command model stays once used, so the next command isn't a cold ~1 GB load.
+            for (mode, cleaner) in cleaners where mode != new.cleanup && cleaner !== commandModel { cleaner.unload() }
             loadCleaner()
         }
         if new.speech != old.speech { log.notice("Speech-to-text: \(new.speech.rawValue)") }
@@ -166,11 +181,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         modes.onChange = { [weak self] in self?.modeChanged(from: $0, to: $1) }
         hotkeys.hotkeys = { [weak self] in self?.modes.mode.hotkeys ?? Hotkeys() }
+        hotkeys.onEscape = { [weak self] in
+            guard let self else { return }
+            Task { await self.session.cancel() }
+        }
         hotkeys.onAction = { [weak self] kind, action in
-            guard let self, kind == .dictate else { return }  // the command key arrives with ticket 11
+            guard let self else { return }
             switch action {
-            case .press: session.keyDown()
-            case .release: Task { await self.session.keyUp() }
+            case .press:
+                if kind == .command { warmCommandModel() }
+                session.keyDown(kind == .command ? .command : .dictation)
+            case .release:
+                if kind == .command { commandReleasedAt = ProcessInfo.processInfo.systemUptime }
+                Task { await self.session.keyUp() }
             case .cancel: Task { await self.session.cancel() }
             }
         }
@@ -198,6 +221,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             SystemPermissions.requestMissing()
         }
+    }
+
+    // MARK: Commands
+
+    /// Loads the command model while the user is still speaking, so an unusual phrasing isn't also a
+    /// cold start.
+    private func warmCommandModel() {
+        guard let model = commandModel else { return }
+        Task { try? await model.prepare() }
+    }
+
+    private func commandSeconds() -> Double {
+        commandReleasedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? 0
     }
 
     // MARK: History
@@ -233,7 +269,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func recentItem(for entry: HistoryEntry) -> NSMenuItem {
         let line = entry.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         let title = line.count > 60 ? line.prefix(59) + "…" : line
-        let entryItem = item(entry.inserted ? title : "\(title) (not inserted)") { Clipboard.copy(entry.text) }
+        let shown = entry.kind == .command ? "\(modes.mode.hotkeys.command.symbol) \(title)"
+            : entry.inserted ? title : "\(title) (not inserted)"
+        let entryItem = item(shown) { Clipboard.copy(entry.text) }
         entryItem.toolTip = "Click to copy"
         return entryItem
     }
@@ -338,6 +376,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .ignored(let reason):
             status = .ready
             log.notice("Ignored: \(reason)")
+        case .commandParsed(let intent):
+            status = .ready
+            // Nothing is sent yet (ticket 12): the message is ready to paste.
+            Clipboard.copy(intent.messageText)
+            log.notice(String(format: "Command parsed in %.2fs after release; message copied", commandSeconds()))
+        case .commandUnknown(let transcript):
+            status = .ready
+            Clipboard.copy(transcript)  // never typed (SPEC §4.3)
+            log.notice(String(format: "Command not understood (%.2fs after release); transcript copied", commandSeconds()))
         case .failed(let failure):
             status = .ready
             lastMessage = switch failure {

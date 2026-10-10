@@ -2,14 +2,14 @@ import Testing
 @testable import Core
 
 @MainActor
-struct DictationSessionTests {
+struct PushToTalkSessionTests {
     let recorder = FakeRecorder()
     let stt = FakeSpeechToText()
     let inserter = FakeInserter()
     let clock = FakeClock()
 
-    func makeSession(language: Language = .hinglish) -> DictationSession {
-        DictationSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now, language: { language })
+    func makeSession(language: Language = .hinglish) -> PushToTalkSession {
+        PushToTalkSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now, language: { language })
     }
 
     @Test func releasingAfterHoldingInsertsTheTranscript() async {
@@ -94,7 +94,7 @@ struct DictationSessionTests {
         await session.keyUp()
 
         let timings = SessionTimings(capture: 2.0, transcribe: 0.5, insert: 0.25)
-        #expect(events == [.listening, .transcribing, .inserted(timings)])
+        #expect(events == [.listening(.dictation), .transcribing, .inserted(timings)])
     }
 
     @Test func insertionFailureIsReported() async {
@@ -151,7 +151,7 @@ struct DictationSessionTests {
 
         #expect(!recorder.isRecording)
         #expect(stt.requests.isEmpty)
-        #expect(events == [.listening, .ignored(.cancelled)])
+        #expect(events == [.listening(.dictation), .ignored(.cancelled)])
     }
 
     @Test func transcribesInTheSelectedLanguage() async {

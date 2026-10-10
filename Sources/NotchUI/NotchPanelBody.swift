@@ -97,6 +97,14 @@ struct NotchPanelBody: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
+        case .command(let result):
+            Text(result.text)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
         default:
             ScrollingWaveform(phase: model.phase, levels: model.history, reduceMotion: reduceMotion)
         }
@@ -125,6 +133,11 @@ struct NotchPanelBody: View {
             Text(expanded ? "Close" : "Details")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
+        case .command:
+            // The message (or, for an unknown command, the transcript) is on the clipboard.
+            Text("Copied")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.cyan.opacity(0.8))
         case .idle:
             EmptyView()
         }
@@ -172,6 +185,8 @@ private struct StatusBadge: View {
         switch phase {
         case .inserted: "checkmark"
         case .error: "exclamationmark"
+        case .command(.parsed): "paperplane.fill"
+        case .command(.unknown): "questionmark"
         default: "mic.fill"
         }
     }
@@ -182,6 +197,7 @@ private struct StatusBadge: View {
         case .listening(.command): .cyan
         case .transcribing, .idle: .white
         case .inserted: .green
+        case .command: .cyan
         case .error: Color(red: 1, green: 0.38, blue: 0.36)
         }
     }

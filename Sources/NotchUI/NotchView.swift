@@ -77,6 +77,7 @@ struct NotchView: View {
         case .listening: "Listening"
         case .transcribing: "Transcribing"
         case .inserted: "Text inserted"
+        case .command(let result): result.text
         case .error(let error, _): error.message
         }
     }

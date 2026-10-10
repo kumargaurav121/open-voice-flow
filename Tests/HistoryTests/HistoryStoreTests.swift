@@ -1,5 +1,6 @@
 import Core
 import Foundation
+import SQLite3
 import Testing
 @testable import History
 
@@ -23,6 +24,38 @@ struct HistoryStoreTests {
         #expect(entries[0].inserted == false && entries[0].language == .english && entries[0].app == nil)
         #expect(entries[1].inserted == true && entries[1].language == .hinglish && entries[1].app == "Slack")
         #expect(entries[1].date == Date(timeIntervalSince1970: 100))
+    }
+
+    @Test func commandsAreSavedWithWhatTheyDid() throws {
+        let store = try HistoryStore(folder: folder)
+        var command = transcript("Message Gurjeet saying hi", inserted: false)
+        command.kind = .command
+        command.outcome = "→ Slack · Gurjeet · \"Hi\""
+        try store.save(command, at: .now, keepAudio: false)
+
+        let entry = try #require(try HistoryStore(folder: folder).entries().first)
+        #expect(entry.kind == .command)
+        #expect(entry.outcome == "→ Slack · Gurjeet · \"Hi\"")
+    }
+
+    @Test func historyFromBeforeCommandsIsKept() throws {
+        // A version 1 database: no kind or outcome columns.
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var db: OpaquePointer?
+        sqlite3_open(folder.appending(path: "history.sqlite").path, &db)
+        sqlite3_exec(db, """
+            CREATE TABLE entries (id INTEGER PRIMARY KEY, date REAL NOT NULL, text TEXT NOT NULL, app TEXT,
+                                  language TEXT NOT NULL, inserted INTEGER NOT NULL, audio TEXT);
+            INSERT INTO entries (date, text, language, inserted) VALUES (100, 'Old dictation', 'english', 1);
+            PRAGMA user_version = 1;
+            """, nil, nil, nil)
+        sqlite3_close(db)
+
+        let entries = try HistoryStore(folder: folder).entries()
+
+        #expect(entries.map(\.text) == ["Old dictation"])
+        #expect(entries.first?.kind == .dictation)
+        #expect(entries.first?.outcome == nil)
     }
 
     @Test func searchMatchesAnyPartOfTheTextIgnoringCase() throws {

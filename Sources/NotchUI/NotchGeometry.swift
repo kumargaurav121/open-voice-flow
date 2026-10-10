@@ -24,7 +24,7 @@ public enum NotchGeometry {
     public enum Size: Sendable, Equatable {
         /// Listening, transcribing, ✓.
         case compact
-        /// A one-line error.
+        /// A one-line error, or a parsed command.
         case message
         /// The error with its details, after a click.
         case details
@@ -34,6 +34,7 @@ public enum NotchGeometry {
             case .idle: return nil
             case .listening, .transcribing, .inserted: self = .compact
             case .error(_, let expanded): self = expanded ? .details : .message
+            case .command: self = .message
             }
         }
     }

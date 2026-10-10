@@ -11,7 +11,7 @@ struct SessionTranscriptTests {
 
     func dictate(_ spoken: String, holding seconds: Double = 1.0, language: Language = .english) async -> [SessionTranscript] {
         stt.transcript = spoken
-        let session = DictationSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now,
+        let session = PushToTalkSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now,
                                        language: { language }, frontmostApp: { "Slack" })
         var transcripts: [SessionTranscript] = []
         session.onTranscript = { transcripts.append($0) }
@@ -40,7 +40,7 @@ struct SessionTranscriptTests {
     @Test func theAppIsTheOneInFrontWhenRecordingStarted() async {
         stt.transcript = "First"
         var front = "Slack"
-        let session = DictationSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now,
+        let session = PushToTalkSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now,
                                        language: { .english }, frontmostApp: { front })
         var transcripts: [SessionTranscript] = []
         session.onTranscript = { transcripts.append($0) }

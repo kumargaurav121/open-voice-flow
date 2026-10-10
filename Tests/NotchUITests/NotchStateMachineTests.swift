@@ -10,14 +10,14 @@ struct NotchStateMachineTests {
     @Test func aDictationPressShowsListening() {
         var notch = NotchStateMachine()
 
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
 
         #expect(notch.phase == .listening(.dictation))
     }
 
     @Test func releaseShowsTranscribing() {
         var notch = NotchStateMachine()
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
 
         notch.handle(.session(.transcribing))
 
@@ -26,7 +26,7 @@ struct NotchStateMachineTests {
 
     @Test func insertedShowsACheckThenReturnsToIdle() {
         var notch = NotchStateMachine()
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
         notch.handle(.session(.transcribing))
 
         let effect = notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0))))
@@ -44,10 +44,10 @@ struct NotchStateMachineTests {
 
     func insertedThenPressedAgain() -> (NotchStateMachine, staleToken: Int) {
         var notch = NotchStateMachine()
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
         let effect = notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0))))
         guard case .returnToIdle(_, let token) = effect else { fatalError("no timer") }
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
         return (notch, token)
     }
 
@@ -62,7 +62,7 @@ struct NotchStateMachineTests {
     @Test(arguments: [IgnoreReason.tooShort, .noSpeech, .emptyTranscript, .cancelled])
     func ignoredPressesCollapseImmediately(reason: IgnoreReason) {
         var notch = NotchStateMachine()
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
 
         let effect = notch.handle(.session(.ignored(reason)))
 
@@ -102,7 +102,7 @@ struct NotchStateMachineTests {
 
     @Test func clickingWhenThereIsNoErrorDoesNothing() {
         var notch = NotchStateMachine()
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
 
         #expect(notch.handle(.clicked) == nil)
         #expect(notch.phase == .listening(.dictation))
@@ -112,7 +112,7 @@ struct NotchStateMachineTests {
         var notch = NotchStateMachine()
         notch.handle(.session(.failed(.microphone)))
 
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
 
         #expect(notch.phase == .listening(.dictation))
     }
@@ -151,10 +151,10 @@ struct NotchStateMachineTests {
 
     @Test func pressingAgainDuringTheCheckGoesStraightToListening() {
         var notch = NotchStateMachine()
-        notch.handle(.session(.listening))
+        notch.handle(.session(.listening(.dictation)))
         notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0))))
 
-        let effect = notch.handle(.session(.listening))
+        let effect = notch.handle(.session(.listening(.dictation)))
 
         #expect(notch.phase == .listening(.dictation))
         #expect(effect == nil)

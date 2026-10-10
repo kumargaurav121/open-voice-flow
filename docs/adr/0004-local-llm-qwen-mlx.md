@@ -22,3 +22,11 @@ Cost: ~0.6 s (Fast) / ~1.3 s (Thorough) per dictation, so it is off by default. 
 MLXHuggingFace needs swift-transformers 1.3+, which conflicts with WhisperKit's 1.1.x pin, so the LLM
 package adapts swift-transformers 1.1 tokenizers itself. MLX's Metal kernels build under SwiftPM once
 Xcode's Metal Toolchain component is installed (`xcodebuild -downloadComponent MetalToolchain`).
+
+## Amendment (ticket 11)
+Commands are parsed **rules first**: direct phrasings ("Message Gurjeet saying …", "Gurjeet ko message karo
+ki …") by pattern, instantly and exactly. Only other phrasings go to the LLM, always the local Qwen3-1.7B
+(never the cloud), as JSON validated against the one known intent; an invalid reply, another app, or a
+recipient the speaker didn't name is "unknown". The model only extracts; nothing is executed until the
+adapter (ticket 12). See docs/eval/reports/2026-10-10-commands.md.
+

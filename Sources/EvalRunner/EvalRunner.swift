@@ -13,6 +13,7 @@ import STT
 ///   DEEPGRAM_API_KEY=… swift run -c release EvalRunner --name deepgram --stt deepgram   # cloud, for comparison
 ///   GROQ_API_KEY=… swift run -c release EvalRunner --name oriserve-groq --model-folder <path> --cleanup cloud --llm groq
 /// Cloud keys come from the environment only (never arguments, which end up in shell history).
+///   swift run -c release EvalRunner --name app-commands --model-folder <path> --commands   # clips 24-28 as commands
 @main
 struct EvalRunner {
     @MainActor
@@ -88,6 +89,35 @@ struct EvalRunner {
             print("  loaded in \(loadTime)")
         }
 
+        // --commands: the command clips (24-28) through the command parser, as the app runs them; written
+        // to <name>.intents.json for `ovf-eval intents`.
+        if args.has("--commands") {
+            let commandModel = LLMCleaner(folder: llmFolder)
+            try await commandModel.prepare()
+            let parser = CommandParser(model: { commandModel })
+            let commandIDs = Set(try JSONDecoder().decode([ReferenceRow].self, from: Data(contentsOf: URL(filePath: "docs/eval/references.json")))
+                .filter { $0.kind == "command" }.map(\.id))
+            var parsed: [IntentRecord] = []
+            for row in manifest where commandIDs.contains(row.id) && (ids?.contains(row.id) ?? true) {
+                let clip = trimmer.trim(try AudioFileLoader.load(clips.appending(path: row.audio)))
+                var text = ""
+                var intent: CommandIntent?
+                let elapsed = try await clock.measure {
+                    text = try await transcriber.transcribe(clip, language: language)
+                    intent = await parser.parse(text)
+                }
+                let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+                parsed.append(IntentRecord(id: row.id, transcript: text, intent: intent.map(IntentRecord.Intent.init), seconds: seconds))
+                print(String(format: "  %02d %5.2fs %@", row.id, seconds, intent?.summary ?? "unknown: \(text)"))
+            }
+            let output = clips.appending(path: "transcripts/\(name).intents.json")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            try encoder.encode(parsed).write(to: output)
+            print("wrote \(output.path)")
+            return
+        }
+
         var records: [TranscriptRecord] = []
         for row in manifest where ids?.contains(row.id) ?? true {
             let clip = trimmer.trim(try AudioFileLoader.load(clips.appending(path: row.audio)))
@@ -111,19 +141,55 @@ private struct ManifestRow: Decodable {
     var audio: String
 }
 
+private struct ReferenceRow: Decodable {
+    var id: Int
+    var kind: String?
+}
+
+private struct IntentRecord: Encodable {
+    struct Intent: Encodable {
+        var action = "send_message"
+        var app: String
+        var to: String
+        var text: String
+
+        init(_ intent: CommandIntent) {
+            switch intent {
+            case .sendMessage(let app, let to, let text): (self.app, self.to, self.text) = (app, to, text)
+            }
+        }
+    }
+
+    var id: Int
+    var transcript: String
+    var intent: Intent?
+    var seconds: Double
+}
+
 private struct Arguments {
     private let values: [String: String]
 
     init(_ arguments: ArraySlice<String>) {
         var values: [String: String] = [:]
-        var iterator = arguments.makeIterator()
-        while let key = iterator.next() {
-            if key.hasPrefix("--"), let value = iterator.next() { values[key] = value }
+        let arguments = Array(arguments)
+        var index = 0
+        while index < arguments.count {
+            let key = arguments[index]
+            index += 1
+            guard key.hasPrefix("--") else { continue }
+            // A flag without a value (e.g. --commands) is followed by another flag or nothing.
+            if index < arguments.count, !arguments[index].hasPrefix("--") {
+                values[key] = arguments[index]
+                index += 1
+            } else {
+                values[key] = ""
+            }
         }
         self.values = values
     }
 
     subscript(key: String) -> String? { values[key] }
+    func has(_ key: String) -> Bool { values[key] != nil }
 }
 
 enum RunnerError: Error, CustomStringConvertible {

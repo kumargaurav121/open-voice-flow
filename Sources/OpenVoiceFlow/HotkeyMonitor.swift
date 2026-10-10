@@ -8,6 +8,10 @@ final class HotkeyMonitor {
     enum Kind { case dictate, command }
 
     var onAction: (Kind, PushToTalkKey.Action) -> Void = { _, _ in }
+    /// Esc, at any time: cancels a command still being understood after its key was released (while a
+    /// key is held, any key press cancels through `onAction`).
+    var onEscape: () -> Void = {}
+    private static let escapeKeyCode: Int64 = 53
     /// The current bindings, read on every event so a change in Settings applies straight away.
     var hotkeys: () -> Hotkeys = { Hotkeys() }
 
@@ -59,6 +63,9 @@ final class HotkeyMonitor {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return
+        }
+        if type == .keyDown, event.getIntegerValueField(.keyboardEventKeycode) == Self.escapeKeyCode {
+            onEscape()
         }
         if let input = input(for: hotkeys.dictate), let action = dictateKey.handle(input) { onAction(.dictate, action) }
         if let input = input(for: hotkeys.command), let action = commandKey.handle(input) { onAction(.command, action) }
