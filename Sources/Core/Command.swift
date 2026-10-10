@@ -12,10 +12,17 @@ public enum CommandIntent: Equatable, Sendable {
         }
     }
 
-    /// The message to send (what goes on the clipboard until the adapter sends it).
+    /// The message to send (what goes on the clipboard if the adapter can't send it).
     public var messageText: String {
         switch self {
         case .sendMessage(_, _, let text): text
+        }
+    }
+
+    /// Who it's for, as spoken.
+    public var recipientName: String {
+        switch self {
+        case .sendMessage(_, let to, _): to
         }
     }
 

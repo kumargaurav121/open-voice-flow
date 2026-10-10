@@ -5,7 +5,7 @@ v1 scope is defined in [`SPEC.md`](SPEC.md). Everything below is deliberately **
 ## v1 — Dictation + one action
 
 - Push-to-talk dictation (English / Hindi / Hinglish), local STT + local cleanup
-- Command hotkey with one action: Slack DM via visible UI automation, 3 s countdown, Esc to stop
+- Command hotkey with one action: Slack DM via visible UI automation, configurable countdown (default 3 s), Esc to stop
 - Notch overlay (pill on non-notched screens), onboarding, manual dictionary, local history
 - Personal eval set + WER script
 
@@ -17,7 +17,7 @@ v1 scope is defined in [`SPEC.md`](SPEC.md). Everything below is deliberately **
 - **Per-app tone**: casual in chat, formal in email, untouched in code.
 - **Auto-learned dictionary**: learn from corrections the user makes right after insertion.
 - **Contacts-aware names**: seed the dictionary from macOS Contacts / Slack.
-- **Disambiguation**: when several contacts match, pause and let the user pick with a number key.
+- **Disambiguation**: when several contacts match (v1 aborts with "More than one …"), pause and let the user pick with a number key.
 - **More actions**: open app, Messages/iMessage, WhatsApp, web search, Linear/Jira issue, calendar event.
 - **Slack in the browser** adapter.
 - Configurable auto-send (no countdown) per action once trusted.

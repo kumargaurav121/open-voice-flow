@@ -73,12 +73,25 @@ public final class Inserter: TextInserter {
     }
 
     public func insert(_ text: String) async throws {
+        try await insert(text, tryingDirectInsert: true)
+    }
+
+    /// Pastes only, skipping the direct insert: for apps (Slack's Electron fields) where a direct insert can
+    /// land late and then the paste fallback would add the text a second time.
+    public func paste(_ text: String) async throws {
+        try await insert(text, tryingDirectInsert: false)
+    }
+
+    private func insert(_ text: String, tryingDirectInsert: Bool) async throws {
         // Without Accessibility neither path works (the synthetic ⌘V is silently dropped).
         guard isTrusted() else { throw InserterError.accessibilityNotGranted }
-        let direct = await field.insertAtCursor(text)
-        if InsertDecision.verdict(for: direct) == .inserted {
-            onMethod(.accessibility)
-            return
+        var direct = DirectInsertResult.refused(diagnostic: "skipped")
+        if tryingDirectInsert {
+            direct = await field.insertAtCursor(text)
+            if InsertDecision.verdict(for: direct) == .inserted {
+                onMethod(.accessibility)
+                return
+            }
         }
 
         let saved = pending?.snapshot ?? ClipboardSnapshot.take(from: pasteboard)

@@ -100,10 +100,13 @@ private struct GeneralTab: View {
                     Label("Dictate and Command need different keys.", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                 }
+                Stepper(value: $modes.mode.sendCountdown, in: Mode.sendCountdownRange) {
+                    LabeledContent("Send messages after", value: "\(modes.mode.sendCountdown) s")
+                }
             } header: {
                 Text("Hold to Talk")
             } footer: {
-                Text("Hold the key while you speak; let go to finish. Esc cancels. Commands (e.g. messaging someone on Slack) arrive in a later version.")
+                Text("Hold the key while you speak; let go to finish. A command like \"Message Gurjeet saying I'll be late\" opens Slack and counts down before sending; Esc stops it at any step.")
                     .foregroundStyle(.secondary)
             }
 

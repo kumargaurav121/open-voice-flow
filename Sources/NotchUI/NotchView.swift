@@ -78,6 +78,9 @@ struct NotchView: View {
         case .transcribing: "Transcribing"
         case .inserted: "Text inserted"
         case .command(let result): result.text
+        case .acting(let progress): progress.headline
+        case .sent(let recipient, let confirmed): confirmed ? "Sent to \(recipient ?? "Slack")" : "Probably sent to \(recipient ?? "Slack"), check Slack"
+        case .stopped: "Stopped, nothing sent"
         case .error(let error, _): error.message
         }
     }

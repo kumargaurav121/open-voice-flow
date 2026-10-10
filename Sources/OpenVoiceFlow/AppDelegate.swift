@@ -1,3 +1,4 @@
+import Actions
 import AppKit
 import Audio
 import Cloud
@@ -91,6 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     )
     /// When the command key was released, for the "parsed in under 2 s" target.
     private var commandReleasedAt: TimeInterval?
+    /// The action carrying out the last command (the Slack DM), while it runs.
+    private var actionRunner: ActionRunner?
+    /// A command's history entry waits for its action, so it records what actually happened.
+    private var pendingCommand: SessionTranscript?
 
     /// Commands the rules don't recognise are parsed on this Mac, never in the cloud. The 1.7B model keeps
     /// them under 2 s after release (eval: 1.7-1.8 s; the 4B took 2.7-2.9 s); the 4B if that's all there is.
@@ -183,10 +188,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkeys.hotkeys = { [weak self] in self?.modes.mode.hotkeys ?? Hotkeys() }
         hotkeys.onEscape = { [weak self] in
             guard let self else { return }
+            actionRunner?.cancel()  // stops at the current step; the screen is left as it is
             Task { await self.session.cancel() }
         }
         hotkeys.onAction = { [weak self] kind, action in
-            guard let self else { return }
+            // While an action drives Slack, a new recording would type into the middle of it.
+            guard let self, actionRunner == nil else { return }
             switch action {
             case .press:
                 if kind == .command { warmCommandModel() }
@@ -225,6 +232,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Commands
 
+    /// Carries out a parsed command in its app, visibly, step by step (SPEC §4.4).
+    private func run(_ intent: CommandIntent) {
+        guard case .sendMessage(_, let to, let text) = intent else { return }
+        let runner = ActionRunner(countdown: .seconds(modes.mode.sendCountdown))
+        runner.onEvent = { [weak self] event in
+            self?.notch.handle(event)
+            if case .stepStarted(let index) = event { self?.log.notice("Action step \(index + 1) started") }  // numbers, not names
+        }
+        actionRunner = runner
+        Task {
+            let outcome = await runner.run(SlackAdapter().steps(to: to, text: text))
+            actionRunner = nil
+            let result: String
+            switch outcome {
+            case .done:
+                result = "Sent on Slack"
+                log.notice("Slack message sent")
+            case .cancelled:
+                result = "Stopped, nothing sent"
+                log.notice("Action stopped by Esc")
+            case .probablySent:
+                // Return was pressed; Slack just didn't confirm in time. Never "not sent".
+                result = "Probably sent (not confirmed)"
+                log.notice("Slack message probably sent; confirmation timed out or was stopped")
+            case .failed(_, let reason):
+                // The message isn't lost: it's on the clipboard to paste by hand.
+                Clipboard.copy(text)
+                result = "Not sent: \(reason)"
+                log.notice("Action failed before sending; message copied")  // no names in the log
+            }
+            if var transcript = pendingCommand {
+                transcript.outcome = "\(intent.summary) · \(result)"
+                pendingCommand = nil
+                record(transcript)
+            }
+        }
+    }
+
     /// Loads the command model while the user is still speaking, so an unusual phrasing isn't also a
     /// cold start.
     private func warmCommandModel() {
@@ -239,6 +284,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: History
 
     private func record(_ transcript: SessionTranscript) {
+        if transcript.kind == .command, actionRunner != nil {
+            pendingCommand = transcript  // saved when the action ends, with its result
+            return
+        }
         do {
             try history.record(transcript)
         } catch {
@@ -378,9 +427,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             log.notice("Ignored: \(reason)")
         case .commandParsed(let intent):
             status = .ready
-            // Nothing is sent yet (ticket 12): the message is ready to paste.
-            Clipboard.copy(intent.messageText)
-            log.notice(String(format: "Command parsed in %.2fs after release; message copied", commandSeconds()))
+            log.notice(String(format: "Command parsed in %.2fs after release", commandSeconds()))
+            run(intent)
         case .commandUnknown(let transcript):
             status = .ready
             Clipboard.copy(transcript)  // never typed (SPEC §4.3)

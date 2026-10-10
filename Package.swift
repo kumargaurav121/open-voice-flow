@@ -38,10 +38,12 @@ let package = Package(
         .target(name: "Cloud", dependencies: ["Core"]),
         // Getting text into the focused app.
         .target(name: "Insertion", dependencies: ["Core"]),
+        // Actions run visibly in real apps (ADR 0006): the Slack desktop DM adapter.
+        .target(name: "Actions", dependencies: ["Core", "Insertion"]),
         // The notch overlay: state machine, geometry, panel and views.
         .target(name: "NotchUI", dependencies: ["Core"]),
         // Menu-bar app: hotkeys, permissions, wiring.
-        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding", "History", "Cloud"]),
+        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding", "History", "Cloud", "Actions"]),
         // Runs the app's speech-to-text over the eval clips, for scoring with scripts/eval.
         .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT", "LLM", "Cloud"]),
 

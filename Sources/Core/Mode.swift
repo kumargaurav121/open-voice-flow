@@ -110,11 +110,21 @@ public struct Mode: Codable, Equatable, Sendable {
     public var speech: SpeechProvider = .local
     public var cloudLLM = CloudLLM()
     public var hotkeys = Hotkeys()
+    /// Seconds the notch counts down before an action sends (Esc stops it).
+    public var sendCountdown = Self.defaultSendCountdown {
+        didSet { sendCountdown = Self.clampedCountdown(sendCountdown) }
+    }
+    public static let sendCountdownRange = 1...10
+    public static let defaultSendCountdown = 3
+
+    static func clampedCountdown(_ seconds: Int) -> Int {
+        min(max(seconds, sendCountdownRange.lowerBound), sendCountdownRange.upperBound)
+    }
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case version, language, cleanup, speech, cloudLLM, hotkeys
+        case version, language, cleanup, speech, cloudLLM, hotkeys, sendCountdown
     }
 
     public init(from decoder: Decoder) throws {
@@ -127,6 +137,8 @@ public struct Mode: Codable, Equatable, Sendable {
         speech = value(.speech, .local)
         cloudLLM = (try? container.decodeIfPresent(LenientCloudLLM.self, forKey: .cloudLLM))?.value ?? CloudLLM()
         hotkeys = (try? container.decodeIfPresent(LenientHotkeys.self, forKey: .hotkeys))?.value ?? Hotkeys()
+        let countdown = (try? container.decodeIfPresent(Int.self, forKey: .sendCountdown)) ?? nil
+        sendCountdown = countdown.map(Self.clampedCountdown) ?? Self.defaultSendCountdown
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -137,6 +149,7 @@ public struct Mode: Codable, Equatable, Sendable {
         try container.encode(speech.rawValue, forKey: .speech)
         try container.encode(cloudLLM, forKey: .cloudLLM)
         try container.encode(hotkeys, forKey: .hotkeys)
+        try container.encode(sendCountdown, forKey: .sendCountdown)
     }
 }
 

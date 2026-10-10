@@ -46,6 +46,11 @@ public final class NotchController {
         }
     }
 
+    /// Progress of an action running in an app (the Slack DM).
+    public func handle(_ event: ActionEvent) {
+        apply(.action(event))
+    }
+
     private func apply(_ input: NotchStateMachine.Input) {
         let effect = machine.handle(input)
         model.phase = machine.phase

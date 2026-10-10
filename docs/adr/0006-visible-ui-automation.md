@@ -16,3 +16,9 @@ The LLM's output is only ever an intent for the adapter, never text typed into a
 command shows "Can't do that yet" and puts the transcript on the clipboard. The recipient must be a name
 the speaker actually said, so a hallucinated or injected name can't reach the adapter.
 
+## Amendment (ticket 12)
+The Slack adapter never presses Return on a list it can't read: Slack's ⌘K suggestions put "Search for: …"
+and duplicate names among the people, so the adapter reads the person rows, requires exactly one sound match
+(else aborts), clicks that row, and verifies each step's result (the DM's window title, the drafted message,
+an empty composer after sending). The name and message are pasted, since Slack ignores synthetic typing.
+

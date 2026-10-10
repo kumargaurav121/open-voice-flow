@@ -61,17 +61,16 @@ Push-to-talk only. Very short presses (< ~250 ms) are ignored. In Settings → G
 
 Targets the **Slack desktop app** only (`com.tinyspeck.slackmacgap`). If not installed → error state.
 
-Scripted, visible UI automation via Accessibility + synthetic keystrokes:
+Scripted, visible UI automation via Accessibility + synthetic input, run by `ActionRunner` (each step has a timeout; the notch lists the steps live). Before every key press, click or paste, Slack must still be in front and the step not stopped (Esc or timeout); keys never go to another app. Built against what Slack's Accessibility tree really exposes (Electron: `AXManualAccessibility` turns it on):
 
-1. Activate/launch Slack, wait until frontmost.
-2. `⌘K` → type the spoken name → wait for results.
-3. Read the top result via AX. If nothing reasonably matches the spoken name → abort with "Couldn't find <name>".
-4. `Enter` to open the DM; verify the conversation header via AX.
-5. Insert the message text into the composer (paste).
-6. **3-second countdown** in the notch: `→ Gurjeet Singh · "I'll be late" · sending in 3s [Esc]` (duration configurable).
-7. Press `Enter` to send. On `Esc` at any step: stop, leave everything as-is on screen.
+1. **Open Slack** (opening, not just activating, so a window comes back if none is open); wait for its main window.
+2. **Find the person**: `⌘K` opens Slack's search; the spoken name is pasted (Slack ignores synthetic typing). Suggestions mix people ("Gurjeet Singh, Direct Message"), "Search for: …" and recent messages, and nothing marks the highlighted row, so `Enter` on the top row is never used. The person rows are matched to the spoken name by sound (`RecipientMatch`): none → "Couldn't find <name>"; **more than one** (e.g. two "Gurpreet Singh") → "More than one <name>: …" (user decision: strict); exactly one → its full name.
+3. **Open the DM** by clicking that row (a plain click from a private event source; a leaked ⌘ makes Slack open a new window); the focused window's title must change to `<Display Name> (DM) - …` naming that person (a DM already open counts only if it shows the full name).
+4. **Write the message**: a draft already in that DM is left alone and the action stops; otherwise paste (paste only, so it can't land twice) and require the composer to hold exactly the message.
+5. **Countdown** in the notch: `→ Gurjeet Singh · "I'll be late" · sending in 3s` with Esc (Settings → General, 1-10 s, default 3).
+6. **Send**: re-check it's still that DM with exactly that message, check for Esc one last time (the point of no return), press `Return`, confirm the composer emptied. After Return the outcome is never "nothing sent": an unconfirmed send is reported as "probably sent".
 
-Each step has a timeout; failure at any step → error state naming the step.
+`Esc` at any step, including the countdown, stops and leaves the screen as it is (a pasted draft stays unsent). Any failure shows the reason, names the step on click, and copies the message to the clipboard so it isn't lost. While an action runs, the hotkeys are ignored. History records what happened ("· Sent on Slack", "· Stopped, nothing sent", "· Not sent: …").
 
 ### 4.5 Notch overlay
 
@@ -88,10 +87,12 @@ States (one state machine; one spring drives size, corners and content: opening 
 | Listening | Mic badge (orange, pulsing; cyan for a command), scrolling live waveform, timer |
 | Transcribing | The same bars roll as a wave; "Transcribing" |
 | Inserted | Badge morphs into a green ✓, bars flatten, "Inserted"; collapses after 0.9 s |
-| Command | Cyan: parsed command (`→ Slack · Gurjeet · "…"`) or "Can't do that yet", with "Copied"; 3 s, then closes. Steps and countdown come with the adapter (ticket 12) |
+| Command | Cyan: parsed command (`→ Slack · Gurjeet · "…"`), or "Can't do that yet" with "Copied" (the transcript); 3 s, then closes |
+| Acting | The panel grows to list the action's steps: ✓ done, a spinner on the running step, hollow circles for the rest; the header shows who (the resolved full name once found) and the message, with an `esc` key cap. The send row becomes the countdown: a draining ring and "Sending in 3s" |
+| Sent / Stopped | Green ✓ "Sent to Gurjeet Singh", or "Stopped, nothing sent" after Esc; "Probably sent: check Slack" (orange) if Return was pressed but Slack didn't confirm |
 | Error | Red badge with a short shake, message in place of the waveform, "Details"; click expands the details, click "Close" dismisses |
 
-`Esc` while `fn` is held cancels (it's a chord, see ticket 01); the keyboard tap is listen-only, so the focused app also receives the `Esc`. The dictation transcript is *not* previewed before insertion (speed first).
+`Esc` while a hotkey is held cancels the recording (a chord, see ticket 01); `Esc` on its own stops a command being understood or an action at any step before the send. The keyboard tap is listen-only, so the focused app also receives the `Esc`. The dictation transcript is *not* previewed before insertion (speed first).
 
 ### 4.6 Custom dictionary
 

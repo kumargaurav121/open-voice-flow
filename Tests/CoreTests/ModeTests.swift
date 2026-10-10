@@ -74,6 +74,19 @@ struct ModeTests {
         #expect(ModeStore(defaults: defaults).mode.cleanup == .fast)
     }
 
+    @Test func theSendCountdownIsKeptWithinOneToTenSeconds() {
+        let store = ModeStore(defaults: defaults)
+        #expect(store.mode.sendCountdown == 3)
+
+        store.mode.sendCountdown = 5
+        #expect(ModeStore(defaults: defaults).mode.sendCountdown == 5)
+
+        store.mode.sendCountdown = 60
+        #expect(store.mode.sendCountdown == 10)
+        defaults.set(Data(#"{"sendCountdown": 0}"#.utf8), forKey: ModeStore.key)
+        #expect(ModeStore(defaults: defaults).mode.sendCountdown == 1)
+    }
+
     @Test func unreadableSettingsFallBackToDefaults() {
         defaults.set(Data("not json".utf8), forKey: ModeStore.key)
 

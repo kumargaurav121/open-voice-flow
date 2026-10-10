@@ -28,13 +28,16 @@ public enum NotchGeometry {
         case message
         /// The error with its details, after a click.
         case details
+        /// An action running: the header plus its step list.
+        case steps
 
         public init?(for phase: NotchStateMachine.Phase) {
             switch phase {
             case .idle: return nil
             case .listening, .transcribing, .inserted: self = .compact
             case .error(_, let expanded): self = expanded ? .details : .message
-            case .command: self = .message
+            case .acting: self = .steps
+            case .command, .sent, .stopped: self = .message
             }
         }
     }
@@ -64,6 +67,16 @@ public enum NotchGeometry {
     public static let panelWidth: CGFloat = 400
     public static let panelBodyHeight: CGFloat = 60
     static let panelDetailsHeight: CGFloat = 64
+    /// Room for an action's steps (five 22 pt rows plus padding).
+    static let panelStepsHeight: CGFloat = 128
+
+    static func extraHeight(for size: Size) -> CGFloat {
+        switch size {
+        case .details: panelDetailsHeight
+        case .steps: panelStepsHeight
+        case .compact, .message: 0
+        }
+    }
     /// Each side of the camera must keep at least this much room for the context row.
     static let panelSideMinimum: CGFloat = 80
 
@@ -73,11 +86,11 @@ public enum NotchGeometry {
     public static func shape(for size: Size, on screen: ScreenInfo) -> Shape {
         if let notch = screen.notch {
             let width = max(panelWidth, notch.width + 2 * panelSideMinimum)
-            let height = notch.height + panelBodyHeight + (size == .details ? panelDetailsHeight : 0)
+            let height = notch.height + panelBodyHeight + extraHeight(for: size)
             let frame = CGRect(x: notch.midX - width / 2, y: screen.frame.maxY - height, width: width, height: height)
             return Shape(frame: frame, topRadius: 10, bottomRadius: 26, style: .notch)
         }
-        let height = floatingHeaderHeight + panelBodyHeight + (size == .details ? panelDetailsHeight : 0)
+        let height = floatingHeaderHeight + panelBodyHeight + extraHeight(for: size)
         let top = screen.frame.maxY - screen.menuBarHeight - floatingGap
         let frame = CGRect(x: screen.frame.midX - panelWidth / 2, y: top - height, width: panelWidth, height: height)
         return Shape(frame: frame, topRadius: 0, bottomRadius: 26, style: .floating)
@@ -86,7 +99,7 @@ public enum NotchGeometry {
     /// The panel: big enough for the largest shape plus its shadow, hanging from the top of the screen.
     /// The view animates the visible shape inside it, so the window itself never resizes mid-spring.
     public static func panelFrame(on screen: ScreenInfo) -> CGRect {
-        let largest = shape(for: .details, on: screen).frame
+        let largest = shape(for: panelStepsHeight > panelDetailsHeight ? .steps : .details, on: screen).frame
         let minY = largest.minY - shadowPadding
         return CGRect(x: largest.minX - shadowPadding, y: minY,
                       width: largest.width + 2 * shadowPadding, height: screen.frame.maxY - minY)
