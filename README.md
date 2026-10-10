@@ -70,4 +70,4 @@ personal eval set; see `scripts/eval/README.md` and the reports in `docs/eval/re
 
 ## License
 
-GPLv3 (see ADR 0002).
+GPLv3: see [LICENSE](LICENSE). Bundled and downloaded models keep their own licenses (above); why GPLv3 and what stays free: ADR 0002.
