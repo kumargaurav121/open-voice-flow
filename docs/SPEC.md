@@ -32,15 +32,15 @@ Live/streaming transcription, hands-free sessions, conversational agent, multipl
 | Command | hold Right `⌥` | Record while held; on release → transcribe → parse intent → run action |
 | Cancel | `Esc` | Cancel recording, processing, or a running action at any step |
 
-Push-to-talk only. Very short presses (< ~250 ms) are ignored.
+Push-to-talk only. Very short presses (< ~250 ms) are ignored. In Settings → General, Dictate and Command can each be any of fn, Right ⌥, Right ⌘, Right ⌃, Right ⇧ (held alone, so they never type or clash with app shortcuts); the two must differ. Cancel isn't rebindable: Esc, or any other key pressed while a hotkey is held. The Command key is stored but does nothing until commands arrive (ticket 11).
 
 ### 4.2 Dictation pipeline
 
 1. **Capture** mic audio (16 kHz mono) while key held; trim leading/trailing silence.
-2. **Transcribe** with the configured STT provider (default: Hinglish Whisper via WhisperKit, local).
+2. **Transcribe** with the configured STT provider (default: Hinglish Whisper via WhisperKit, local). Optional cloud: Deepgram Nova-3 with the user's own key (Hinglish mode asks for its multilingual code-switching, English mode for English; the dictionary goes as key terms). If it fails or takes over 8 s, the dictation is transcribed locally instead and the reason logged.
 3. **Clean up**, in two layers:
    - **Rules, always** (~1 ms): hesitations (um, uh), stuttered English function words ("the the"), spacing and sentence capitalisation. Meaning-bearing words ("like", "so", "matlab") and Hindi reduplication ("jaldi jaldi") are left alone.
-   - **AI, opt-in** from the menu: *AI Cleanup: Off (default) / Fast (Qwen3-1.7B, ~0.6 s) / Thorough (Qwen3-4B-Instruct, ~1.3 s)*, a local MLX model that also removes fillers and false starts and fixes punctuation. Its rewrite is used only if `AICleanupGuard` confirms it deleted nothing but fillers (at punctuation boundaries) and nearby repeats, added no words and stayed in English letters; otherwise, and on timeout (4 s) or failure, the rules output is used and the reason is logged.
+   - **AI, opt-in** from the menu or Settings: *AI Cleanup: Off (default) / Fast (Qwen3-1.7B, ~0.6 s) / Thorough (Qwen3-4B-Instruct, ~1.3 s) / Cloud (OpenAI or Groq with the user's own key, same instructions)*, a local MLX model that also removes fillers and false starts and fixes punctuation. Its rewrite is used only if `AICleanupGuard` confirms it deleted nothing but fillers (at punctuation boundaries) and nearby repeats, added no words and stayed in English letters; otherwise, and on timeout (4 s) or failure, the rules output is used and the reason is logged.
    - **script**: output is always English letters and Western digits (user requirement). The Hinglish model writes Roman script itself; `LatinScriptSpeechToText` transliterates any Devanagari or Arabic-script run that slips through.
    - Code editors and terminals (bundle-ID list) get the raw transcript: no cleanup at all.
 4. **Insert**: AX direct insert where the focused element supports it, else clipboard paste (`⌘V`) with the previous clipboard restored afterwards — unless the user changed the clipboard in the meantime.
@@ -95,14 +95,14 @@ States (one state machine; one spring drives size, corners and content: opening 
 
 ### 4.6 Custom dictionary
 
-Hand-edited list of words/names (e.g. "Gurjeet", product names), edited from the menu (Dictionary…; moves into Settings with ticket 10) and stored locally. After speech-to-text, anything that sounds like a term is respelled the user's way (both modes); the list is also LLM cleanup context. Not a Whisper prompt: the Hinglish model ignores it (ADR 0011).
+Hand-edited list of words/names (e.g. "Gurjeet", product names), edited in Settings → Dictionary and stored locally. After speech-to-text, anything that sounds like a term is respelled the user's way (both modes); the list is also LLM cleanup context. Not a Whisper prompt: the Hinglish model ignores it (ADR 0011).
 
 ### 4.7 History & privacy
 
 - Each dictation's final text, time, frontmost app and mode stored locally (SQLite, `~/Library/Application Support/open-voice-flow/history/`), kept until cleared. Text that couldn't be inserted is saved too, marked "Not inserted", so it isn't lost.
 - Menu bar: **Recent** (last 10, click to copy) and **History…** (the newest 500; search covers everything; copy, delete, "Clear History…" with confirmation).
 - Deleted text is overwritten in the database (SQLite secure delete), and the history folder is excluded from Time Machine, so deleting really removes it.
-- Audio retention **off** by default; opt-in ("Keep audio recordings" in History): a WAV per dictation, deleted with its entry and by Clear History.
+- Audio retention **off** by default; opt-in ("Keep audio recordings" in Settings → Privacy): a WAV per dictation, deleted with its entry and by Clear History.
 - No telemetry/analytics. No network calls except model downloads and user-selected cloud providers.
 
 ### 4.8 Onboarding (first run)
@@ -118,10 +118,10 @@ Guided window, one step at a time. It opens on first launch and whenever a pinne
 
 | Role | Default (local) | Alternatives |
 |---|---|---|
-| STT | Two modes from a picker: **Hinglish** (default) = `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, Roman-script output) converted by this project to WhisperKit Core ML from pinned weights; **English** = Whisper large-v3-turbo | Cloud BYOK (Deepgram, ElevenLabs, OpenAI); Parakeet via FluidAudio (English) |
-| LLM | Cleanup: opt-in Fast = Qwen3-1.7B / Thorough = Qwen3-4B-Instruct (4-bit, MLX-Swift); intents (ticket 11) TBD | Gemma 4 E2B; Ollama; cloud BYOK (Claude Haiku 4.5, OpenAI, Groq) |
+| STT | Two modes from a picker: **Hinglish** (default) = `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, Roman-script output) converted by this project to WhisperKit Core ML from pinned weights; **English** = Whisper large-v3-turbo | **Cloud BYOK (ticket 10): Deepgram Nova-3**. Later: ElevenLabs, OpenAI; Parakeet via FluidAudio (English) |
+| LLM | Cleanup: opt-in Fast = Qwen3-1.7B / Thorough = Qwen3-4B-Instruct (4-bit, MLX-Swift); intents (ticket 11) TBD | **Cloud BYOK (ticket 10): OpenAI-compatible, OpenAI or Groq**, as AI Cleanup "Cloud". Later: Claude Haiku 4.5; Gemma 4 E2B; Ollama |
 
-All settings are stored internally as a single `Mode` (STT provider + LLM provider + prompt + language/script), so multiple Modes later is a UI change only.
+Settings are stored as a single `Mode` value: language, AI cleanup choice, STT provider, cloud LLM (service + model) and hotkeys, as versioned, leniently decoded JSON (unknown values fall back to defaults; settings from before Modes were migrated). The cleanup prompt is shared (`CleanupPrompt`), not per Mode yet. App-wide settings stay outside the Mode: dictionary, audio retention, onboarding state. API keys live only in the Keychain (`APIKeys`), never in preferences or logs; logs record a provider's status code, never its message. So multiple Modes later is a UI change only.
 
 ## 6. Architecture
 
@@ -130,15 +130,16 @@ Swift packages, each depending only on those above it:
 ```
 Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter, TextCleaner; ActionAdapter arrives with ticket 11), cleanup rules and guard
 Audio       Mic capture, silence trim, current input level
-STT         WhisperKit, FluidAudio/Parakeet, cloud providers
-LLM         MLX-Swift (Qwen), Ollama, cloud providers
+STT         WhisperKit (local); FluidAudio/Parakeet later
+LLM         MLX-Swift (Qwen), local; Ollama later
+Cloud       Opt-in providers with the user's own keys: Deepgram STT, OpenAI-compatible cleanup; Keychain key storage
 Insertion   AX insert, clipboard paste + restore
 History     Local transcript history (system SQLite) and opt-in audio
 ModelStore  Pinned model manifests (generated by scripts/make-manifests.py), resumable checksum-verified downloads
 Onboarding  First-run flow (state machine), window and views
 Actions     Cancellable step runner with progress events; SlackAdapter
 NotchUI     Overlay panel, state machine, geometry, waveform levels, animations
-App         Menu bar, hotkeys (CGEventTap), wiring (onboarding services), settings, history
+App         Menu bar, hotkeys (CGEventTap), wiring (onboarding services), Settings window, history window
 EvalRunner  Dev tool: runs the app's pipeline (Audio + STT + cleanup) over the eval clips for scripts/eval (not shipped)
 ```
 

@@ -9,26 +9,11 @@ import ModelStore
 /// punctuation and casing. Its output still has to pass `AICleanupGuard` before it's used.
 @MainActor
 public final class LLMCleaner: TextCleaner {
-    static let instructions = """
-        You tidy up dictated text. Delete filler words used as hesitations (um, uh, like, you know, basically, \
-        actually, I mean, matlab, toh) and words the speaker repeated or restarted. Fix punctuation and \
-        capitalisation, and keep question marks. Keep every other word, in the same order and language: the \
-        text may mix English and Hindi written in English letters, and must stay that way. Never translate, \
-        answer, summarise or add words. Reply with only the tidied text.
-
-        Examples:
-        Input: So basically bhai kal ka demo demo ready hai na? Like client ko eleven baje dikhana hai
-        Output: Bhai, kal ka demo ready hai na? Client ko eleven baje dikhana hai.
-        Input: Hey Priya, I mean, can you can you send me the deck by tomorrow? Matlab urgent hai
-        Output: Hey Priya, can you send me the deck by tomorrow? Urgent hai.
-        Input: Meeting at 3 pm is confirmed
-        Output: Meeting at 3 pm is confirmed.
-        """
 
     /// Each mode's model folder, as installed by onboarding from the pinned manifests (ModelStore).
     public static func folder(for mode: CleanupMode) -> URL? {
         switch mode {
-        case .off: nil
+        case .off, .cloud: nil
         case .fast: BuiltInModels.cleanupFast.installedFolder
         case .thorough: BuiltInModels.cleanupThorough.installedFolder
         }
@@ -37,12 +22,6 @@ public final class LLMCleaner: TextCleaner {
     /// The user's dictionary, given to the model as spelling context.
     public var vocabulary: () -> [String] = { [] }
 
-    /// The instructions, plus the dictionary's spellings when there are any.
-    static func instructions(vocabulary: [String]) -> String {
-        guard !vocabulary.isEmpty else { return instructions }
-        return instructions + "\nNames and terms the speaker uses; spell them exactly like this: "
-            + vocabulary.joined(separator: ", ") + ".\n"
-    }
 
     /// Still generating (e.g. after a timeout): a new cleanup is refused rather than run alongside it.
     public struct Busy: Error {}
@@ -99,7 +78,7 @@ public final class LLMCleaner: TextCleaner {
         // A fresh session per transcript: no history, so one dictation can't steer the next.
         let session = ChatSession(
             container,
-            instructions: Self.instructions(vocabulary: vocabulary()),
+            instructions: CleanupPrompt.instructions(vocabulary: vocabulary()),
             generateParameters: GenerateParameters(maxTokens: max(32, text.count / 2), temperature: 0),
             additionalContext: ["enable_thinking": false]  // Qwen3 thinks by default
         )

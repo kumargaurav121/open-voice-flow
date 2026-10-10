@@ -9,3 +9,6 @@ scripts/eval/.venv/
 __pycache__/
 .mypy_cache/
 .pytest_cache/
+
+# Local API keys (cloud eval). Never commit.
+.env

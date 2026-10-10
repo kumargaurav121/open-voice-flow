@@ -1,4 +1,5 @@
 import Audio
+import Cloud
 import Core
 import Foundation
 import LLM
@@ -9,6 +10,9 @@ import STT
 ///
 ///   swift run -c release EvalRunner --name app-oriserve --model-folder <path>   # Hinglish mode
 ///   swift run -c release EvalRunner --name app-turbo                            # English mode / fallback
+///   DEEPGRAM_API_KEY=… swift run -c release EvalRunner --name deepgram --stt deepgram   # cloud, for comparison
+///   GROQ_API_KEY=… swift run -c release EvalRunner --name oriserve-groq --model-folder <path> --cleanup cloud --llm groq
+/// Cloud keys come from the environment only (never arguments, which end up in shell history).
 @main
 struct EvalRunner {
     @MainActor
@@ -16,10 +20,14 @@ struct EvalRunner {
         let args = Arguments(CommandLine.arguments.dropFirst())
         LLMCleaner.configureGPU()
         // --clean-text "<text>": run one text through the rules and the AI cleanup, and stop.
-        // --cleanup off|fast|thorough: the app's AI Cleanup menu (rules always run). Default off.
+        // --cleanup off|fast|thorough|cloud: the app's AI Cleanup menu (rules always run). Default off.
+        // --llm openai|groq [--llm-model <name>]: the cloud LLM for --cleanup cloud.
         let cleanupMode = CleanupMode(storedValue: args["--cleanup"])
         let llmFolder = args["--llm-folder"].map { URL(filePath: $0, directoryHint: .isDirectory) }
-            ?? LLMCleaner.folder(for: cleanupMode == .off ? .thorough : cleanupMode)!
+            ?? LLMCleaner.folder(for: cleanupMode.isLocal ? cleanupMode : .thorough)!
+        let cloudLLM = CloudLLM(service: args["--llm"].flatMap { name in CloudLLM.Service.allCases.first { $0.rawValue.lowercased() == name.lowercased() } } ?? .groq, model: args["--llm-model"])
+        let environment = ProcessInfo.processInfo.environment
+        let envKey: (APIKeys.Account) -> String? = { environment[$0.environmentVariable] }
         if let text = args["--clean-text"] {
             let cleaner = LLMCleaner(folder: llmFolder)
             try await cleaner.prepare()
@@ -50,12 +58,20 @@ struct EvalRunner {
         // Same pipeline as the app.
         // --dictionary "Gurjeet,Supabase": the custom dictionary, as the app applies it.
         let dictionary = args["--dictionary"].map { $0.split(separator: ",").map(String.init) } ?? []
-        let cleaner = cleanupMode == .off ? nil : LLMCleaner(folder: llmFolder)
-        cleaner?.vocabulary = { dictionary }
-        if let cleaner { try await cleaner.prepare() }
+        let localCleaner = cleanupMode.isLocal ? LLMCleaner(folder: llmFolder) : nil
+        localCleaner?.vocabulary = { dictionary }
+        if let localCleaner { try await localCleaner.prepare() }
+        let cleaner: TextCleaner? = cleanupMode == .cloud
+            ? OpenAICompatibleCleaner(llm: { cloudLLM }, apiKey: { envKey($0.keyAccount) }, vocabulary: { dictionary })
+            : localCleaner
+        // --stt deepgram: Deepgram Nova-3 instead of WhisperKit (no fallback here: a failure should show).
+        let useDeepgram = args["--stt"] == "deepgram"
+        let speech: SpeechToText = useDeepgram
+            ? DeepgramSpeechToText(apiKey: { envKey(.deepgram) }, keyterms: { dictionary })
+            : whisper
         let transcriber = CleanupSpeechToText(
             // Same spell check as the app: real English words are never respelled.
-            wrapping: DictionarySpeechToText(wrapping: LatinScriptSpeechToText(wrapping: whisper), terms: { dictionary },
+            wrapping: DictionarySpeechToText(wrapping: LatinScriptSpeechToText(wrapping: speech), terms: { dictionary },
                                              isEnglishWord: { EnglishWords.contains($0) }),
             selectedAI: { cleaner },
             isCodeContext: { false }, timeout: .seconds(5),
@@ -64,9 +80,13 @@ struct EvalRunner {
         let trimmer = SilenceTrimmer()
         let clock = ContinuousClock()
 
-        print("\(name): loading \(model)")
-        let loadTime = try await clock.measure { try await whisper.prepare() }
-        print("  loaded in \(loadTime)")
+        if useDeepgram {
+            print("\(name): Deepgram Nova-3")
+        } else {
+            print("\(name): loading \(model)")
+            let loadTime = try await clock.measure { try await whisper.prepare() }
+            print("  loaded in \(loadTime)")
+        }
 
         var records: [TranscriptRecord] = []
         for row in manifest where ids?.contains(row.id) ?? true {

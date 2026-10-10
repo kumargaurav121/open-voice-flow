@@ -2,38 +2,8 @@ import AppKit
 import Core
 import SwiftUI
 
-/// Menu bar → Dictionary…: the list of names and terms to spell the user's way. Moves into Settings with
-/// ticket 10.
-@MainActor
-final class DictionaryWindow {
-    private let store: DictionaryStore
-    private var window: NSWindow?
-
-    init(store: DictionaryStore) {
-        self.store = store
-    }
-
-    func show() {
-        if window == nil {
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 400, height: 440),
-                styleMask: [.titled, .closable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            window.title = "Dictionary"
-            window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: DictionaryView(store: store))
-            window.contentMinSize = NSSize(width: 340, height: 320)
-            window.center()
-            self.window = window
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
-    }
-}
-
-private struct DictionaryView: View {
+/// The Dictionary tab in Settings: names and terms to spell the user's way.
+struct DictionaryView: View {
     let store: DictionaryStore
     @State private var newTerm = ""
     @State private var selection: String?

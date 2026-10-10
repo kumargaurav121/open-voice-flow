@@ -139,9 +139,9 @@ private struct HistoryView: View {
 
             Divider()
             HStack {
-                Toggle("Keep audio recordings", isOn: $model.keepAudio)
-                    .toggleStyle(.checkbox)
-                    .help("Saves each dictation's audio on this Mac alongside its text. Off by default.")
+                Text(model.keepAudio ? "Recordings are kept (Settings → Privacy)" : "Text only; recordings aren't kept")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Button("Clear History…") { confirmingClear = true }
                     .disabled(model.entries.isEmpty && model.query.isEmpty)

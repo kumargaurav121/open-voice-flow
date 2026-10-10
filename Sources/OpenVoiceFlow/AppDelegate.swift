@@ -1,5 +1,6 @@
 import AppKit
 import Audio
+import Cloud
 import Core
 import History
 import Insertion
@@ -37,9 +38,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let downloader = ModelDownloader(transport: URLSessionTransport())
     private var onboarding: (window: OnboardingWindow, model: OnboardingModel)?
     private let dictionary = DictionaryStore()
+    private let modes = ModeStore()
+    private let keys = APIKeys()
+    private lazy var settingsWindow = SettingsWindow(modes: modes, keys: keys, dictionary: dictionary, history: history,
+                                                     cleanupAvailable: { [weak self] in self?.cleanupAvailable($0) ?? false })
+    private lazy var cloudCleaner = OpenAICompatibleCleaner(
+        llm: { [weak self] in self?.modes.mode.cloudLLM ?? CloudLLM() },
+        apiKey: { [weak self] in try self?.keys.key(for: $0.keyAccount) },
+        vocabulary: { [weak self] in self?.dictionary.terms ?? [] }
+    )
     private lazy var history = HistoryModel(store: try? HistoryStore())
     private lazy var historyWindow = HistoryWindow(model: history)
-    private lazy var dictionaryWindow = DictionaryWindow(store: dictionary)
     private let recorder = MicRecorder()
     private let inserter = Inserter()
     private lazy var notch = NotchController(
@@ -52,7 +61,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Always English letters and digits, whichever model or script (user requirement).
             // The user's dictionary respells names before cleanup, so the AI sees them right too.
             wrapping: DictionarySpeechToText(
-                wrapping: LatinScriptSpeechToText(wrapping: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel])),
+                wrapping: LatinScriptSpeechToText(wrapping: SelectedSpeechToText(
+                    local: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel]),
+                    // Only called when chosen in Settings; falls back to this Mac if it fails.
+                    cloud: DeepgramSpeechToText(apiKey: { [weak self] in try self?.keys.key(for: .deepgram) },
+                                                keyterms: { [weak self] in self?.dictionary.terms ?? [] }),
+                    provider: { [weak self] in self?.modes.mode.speech ?? .local },
+                    log: { [weak self] in self?.log.notice($0) }
+                )),
                 terms: { [weak self] in self?.dictionary.terms ?? [] },
                 isEnglishWord: { EnglishWords.contains($0) }
             ),
@@ -85,20 +101,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// The cleaner the pipeline uses right now; nil when AI cleanup is off.
-    private var activeCleaner: LLMCleaner? { cleanupMode == .off ? nil : cleaner(for: cleanupMode) }
-
-    /// The menu's AI Cleanup choice. Only the selected model stays in memory.
-    private var cleanupMode: CleanupMode {
-        get { CleanupMode(storedValue: UserDefaults.standard.string(forKey: "cleanupMode")) }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "cleanupMode")
-            for (mode, cleaner) in cleaners where mode != newValue { cleaner.unload() }
-            loadCleaner()
+    private var activeCleaner: TextCleaner? {
+        switch cleanupMode {
+        case .off: nil
+        case .cloud: cloudCleaner
+        case .fast, .thorough: cleaner(for: cleanupMode)
         }
     }
 
+    /// Whether a cleanup choice can run: its local model is installed, or its cloud key is saved.
+    private func cleanupAvailable(_ mode: CleanupMode) -> Bool {
+        switch mode {
+        case .off: true
+        case .cloud: keys.hasKey(for: modes.mode.cloudLLM.service.keyAccount)
+        case .fast, .thorough: cleaner(for: mode) != nil
+        }
+    }
+
+    /// The menu's (and Settings') AI Cleanup choice. Only the selected local model stays in memory.
+    private var cleanupMode: CleanupMode {
+        get { modes.mode.cleanup }
+        set { modes.mode.cleanup = newValue }
+    }
+
     private func loadCleaner() {
-        guard let cleaner = activeCleaner else { return }
+        guard cleanupMode != .cloud, let cleaner = cleaner(for: cleanupMode) else { return }
         let mode = cleanupMode
         Task {
             let started = ProcessInfo.processInfo.systemUptime
@@ -112,11 +139,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private var language: Language {
-        get { Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .hinglish }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "language")
-            loadModel()  // the other language's model loads on first switch
+        get { modes.mode.language }
+        set { modes.mode.language = newValue }
+    }
+
+    /// Side effects of a Mode change, from the menu or Settings.
+    private func modeChanged(from old: Mode, to new: Mode) {
+        if new.language != old.language { loadModel() }  // the other language's model loads on first switch
+        if new.cleanup != old.cleanup {
+            for (mode, cleaner) in cleaners where mode != new.cleanup { cleaner.unload() }
+            loadCleaner()
         }
+        if new.speech != old.speech { log.notice("Speech-to-text: \(new.speech.rawValue)") }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -130,8 +164,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.notch.handle(event)
             self?.handle(event)
         }
-        hotkeys.onAction = { [weak self] action in
-            guard let self else { return }
+        modes.onChange = { [weak self] in self?.modeChanged(from: $0, to: $1) }
+        hotkeys.hotkeys = { [weak self] in self?.modes.mode.hotkeys ?? Hotkeys() }
+        hotkeys.onAction = { [weak self] kind, action in
+            guard let self, kind == .dictate else { return }  // the command key arrives with ticket 11
             switch action {
             case .press: session.keyDown()
             case .release: Task { await self.session.keyUp() }
@@ -369,19 +405,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(languageItem)
         let cleanupModes = NSMenu()
         for mode in CleanupMode.allCases {
-            let installed = mode == .off || cleaner(for: mode) != nil
-            let entry = item(installed ? mode.displayName : "\(mode.displayName) (not installed)") { [weak self] in
+            let available = cleanupAvailable(mode)
+            let entry = item(mode.menuTitle(cloud: modes.mode.cloudLLM, available: available)) { [weak self] in
                 self?.cleanupMode = mode
             }
             entry.state = mode == cleanupMode ? .on : .off
-            entry.isEnabled = installed
+            entry.isEnabled = available
             cleanupModes.addItem(entry)
         }
         let cleanupItem = NSMenuItem(title: "AI Cleanup", action: nil, keyEquivalent: "")
         cleanupItem.submenu = cleanupModes
         menu.addItem(cleanupItem)
-        menu.addItem(item("Dictionary…") { [weak self] in self?.dictionaryWindow.show() })
-        menu.addItem(item("Set Globe Key to Do Nothing…") { SystemPermissions.openKeyboardSettings() })
+        if [modes.mode.hotkeys.dictate, modes.mode.hotkeys.command].contains(.fn) {
+            menu.addItem(item("Set Globe Key to Do Nothing…") { SystemPermissions.openKeyboardSettings() })
+        }
+        let settings = item("Settings…") { [weak self] in self?.settingsWindow.show() }
+        settings.keyEquivalent = ","
+        menu.addItem(settings)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Open Voice Flow", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -393,7 +433,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .needsSetup: "Finish setup to start dictating."
         case .loadingModel: "Loading speech model"
         case .modelFailed: "Speech model failed to load"
-        case .ready: "Ready. Hold fn to dictate."
+        case .ready: "Ready. Hold \(modes.mode.hotkeys.dictate.displayName) to dictate."
         case .listening: "Listening"
         case .transcribing: "Transcribing"
         }
@@ -407,6 +447,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func item(_ title: String, action: @escaping @MainActor () -> Void) -> NSMenuItem {
         ClosureMenuItem(title: title, handler: action)
+    }
+}
+
+extension CleanupMode {
+    /// How the menu and Settings name a cleanup choice, and why it's unavailable.
+    func menuTitle(cloud: CloudLLM, available: Bool) -> String {
+        let name = self == .cloud ? "Cloud (\(cloud.service.displayName))" : displayName
+        guard !available else { return name }
+        return self == .cloud ? "\(name), add a key in Settings → Providers" : "\(name), not installed"
     }
 }
 

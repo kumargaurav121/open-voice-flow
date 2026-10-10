@@ -46,49 +46,15 @@ public final class CleanupSpeechToText: SpeechToText {
             log("AI cleanup timed out after \(timeout); used rules cleanup")
             return rules
         } catch {
-            log("AI cleanup failed (\(error)); used rules cleanup")
+            log("AI cleanup failed (\(logSafe(error))); used rules cleanup")
             return rules
         }
         let trimmed = rewritten.trimmingCharacters(in: .whitespacesAndNewlines)
         guard AICleanupGuard.accepts(original: rules, rewritten: trimmed) else {
-            log("AI cleanup rejected (changed the meaning): \"\(trimmed.prefix(80))\"; used rules cleanup")
+            log("AI cleanup rejected (changed the meaning); used rules cleanup")
             return rules
         }
         log("AI cleanup took \(ContinuousClock.now - started)")
         return trimmed
-    }
-
-    private struct TimedOut: Error {}
-
-    /// Returns the work's result, or throws `TimedOut` after `limit` even if the work ignores cancellation
-    /// (a model mid-generation may not check for it); the work is cancelled either way.
-    private func withTimeout(_ limit: Duration, _ work: @escaping @MainActor () async throws -> String) async throws -> String {
-        let race = Race()
-        return try await withCheckedThrowingContinuation { continuation in
-            let worker = Task { @MainActor in
-                let result: Result<String, Error>
-                do { result = .success(try await work()) } catch { result = .failure(error) }
-                race.timer?.cancel()
-                race.finish(continuation, with: result)
-            }
-            race.timer = Task { @MainActor in
-                guard (try? await Task.sleep(for: limit)) != nil else { return }  // cancelled: work won
-                worker.cancel()
-                race.finish(continuation, with: .failure(TimedOut()))
-            }
-        }
-    }
-}
-
-/// Resumes a continuation exactly once: whichever of the work and the timer finishes first wins.
-@MainActor
-private final class Race {
-    private var done = false
-    var timer: Task<Void, Never>?
-
-    func finish(_ continuation: CheckedContinuation<String, Error>, with result: Result<String, Error>) {
-        guard !done else { return }
-        done = true
-        continuation.resume(with: result)
     }
 }

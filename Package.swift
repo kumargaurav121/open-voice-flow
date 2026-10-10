@@ -34,14 +34,16 @@ let package = Package(
         .target(name: "Onboarding", dependencies: ["Core", "ModelStore"]),
         // Local transcript history (SQLite, the system library) and opt-in audio.
         .target(name: "History", dependencies: ["Core"], linkerSettings: [.linkedLibrary("sqlite3")]),
+        // Optional cloud providers with the user's own keys (Deepgram STT, OpenAI-compatible LLM); keys in the Keychain.
+        .target(name: "Cloud", dependencies: ["Core"]),
         // Getting text into the focused app.
         .target(name: "Insertion", dependencies: ["Core"]),
         // The notch overlay: state machine, geometry, panel and views.
         .target(name: "NotchUI", dependencies: ["Core"]),
         // Menu-bar app: hotkeys, permissions, wiring.
-        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding", "History"]),
+        .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding", "History", "Cloud"]),
         // Runs the app's speech-to-text over the eval clips, for scoring with scripts/eval.
-        .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT", "LLM"]),
+        .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT", "LLM", "Cloud"]),
 
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "AudioTests", dependencies: ["Audio"]),
@@ -52,5 +54,6 @@ let package = Package(
         .testTarget(name: "ModelStoreTests", dependencies: ["ModelStore"]),
         .testTarget(name: "OnboardingTests", dependencies: ["Onboarding"]),
         .testTarget(name: "HistoryTests", dependencies: ["History"]),
+        .testTarget(name: "CloudTests", dependencies: ["Cloud"]),
     ]
 )

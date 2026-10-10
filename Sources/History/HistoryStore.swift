@@ -90,7 +90,7 @@ public final class HistoryStore {
         var audioName: String?
         if keepAudio, !transcript.clip.isEmpty {
             let name = "\(UUID().uuidString).wav"
-            if (try? WAVFile.data(for: transcript.clip).write(to: audioFolder.appending(path: name))) != nil {
+            if (try? transcript.clip.wavData.write(to: audioFolder.appending(path: name))) != nil {
                 audioName = name
             }
         }

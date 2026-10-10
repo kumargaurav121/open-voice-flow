@@ -19,3 +19,10 @@ Hinglish, 17.5% agnostic / 22.0% strict WER, no translations) with `<|en|>` forc
 stock turbo (7.0% English WER). Details: addendum in docs/eval/reports/2026-10-08-bakeoff.md.
 The Hinglish model runs on the Neural Engine (on the GPU its encoder cost ~2 s per clip). Consequence:
 its first load on a Mac compiles for ~15-16 min (M1 Pro), cached afterwards; onboarding must show it.
+
+## Amendment (ticket 10)
+The first cloud option is **Deepgram Nova-3** for speech-to-text and an **OpenAI-compatible LLM (OpenAI or
+Groq)** for AI cleanup, both with the user's own key (stored in the Keychain) and both off by default.
+They're contacted only when chosen in Settings. A failed or slow (> 8 s) Deepgram request falls back to
+local transcription, so a dictation is never lost to the network; a failed cloud cleanup falls back to
+the rules cleanup, like the local model.

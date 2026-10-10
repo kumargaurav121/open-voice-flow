@@ -92,7 +92,25 @@ struct CleanupSpeechToTextTests {
 
         #expect(text == "Ship it today")
         #expect(logs.contains { $0.contains("rejected") })
+        #expect(!logs.contains { $0.contains("deploy") })  // the log never holds transcript text
     }
+
+    @Test mutating func aFailureIsLoggedWithoutTheProvidersOwnMessage() async throws {
+        // A provider's error can echo part of the API key ("Incorrect API key provided: sk-proj-****abcd").
+        aiEnabled = true
+        ai.error = ChattyError()
+
+        let (_, logs) = try await transcribe("um, ship it today")
+
+        #expect(logs.contains { $0.contains("failed") && $0.contains("HTTP 401") })
+        #expect(!logs.contains { $0.contains("sk-proj") })
+    }
+}
+
+/// An error whose description holds secrets, with a safe summary for the log.
+private struct ChattyError: LogSafeError, CustomStringConvertible {
+    var description: String { "Incorrect API key provided: sk-proj-****abcd" }
+    var logDescription: String { "HTTP 401 from OpenAI" }
 }
 
 struct CodeContextTests {

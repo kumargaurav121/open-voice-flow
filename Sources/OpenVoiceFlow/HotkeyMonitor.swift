@@ -1,13 +1,18 @@
 import AppKit
 import Core
 
-/// Watches the keyboard system-wide for the push-to-talk key. Listen-only: events still
-/// reach the focused app. Requires Input Monitoring permission.
+/// Watches the keyboard system-wide for the push-to-talk keys (dictate and command, chosen in Settings).
+/// Listen-only: events still reach the focused app. Requires Input Monitoring permission.
 @MainActor
 final class HotkeyMonitor {
-    var onAction: (PushToTalkKey.Action) -> Void = { _ in }
+    enum Kind { case dictate, command }
 
-    private var key = PushToTalkKey()
+    var onAction: (Kind, PushToTalkKey.Action) -> Void = { _, _ in }
+    /// The current bindings, read on every event so a change in Settings applies straight away.
+    var hotkeys: () -> Hotkeys = { Hotkeys() }
+
+    private var dictateKey = PushToTalkKey()
+    private var commandKey = PushToTalkKey()
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -39,20 +44,23 @@ final class HotkeyMonitor {
     }
 
     private func handle(type: CGEventType, event: CGEvent) {
-        let input: PushToTalkKey.Input
-        switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+        let hotkeys = hotkeys()
+        func input(for trigger: TriggerKey) -> PushToTalkKey.Input? {
+            switch type {
+            case .flagsChanged:
+                let state = trigger.state(flags: event.flags.rawValue)
+                return .flagsChanged(trigger: state.down, otherModifiers: state.otherModifiers)
+            case .keyDown:
+                return .keyDown
+            default:
+                return nil
+            }
+        }
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return
-        case .flagsChanged:
-            let flags = event.flags
-            let others: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
-            input = .flagsChanged(trigger: flags.contains(.maskSecondaryFn), otherModifiers: !flags.intersection(others).isEmpty)
-        case .keyDown:
-            input = .keyDown
-        default:
-            return
         }
-        if let action = key.handle(input) { onAction(action) }
+        if let input = input(for: hotkeys.dictate), let action = dictateKey.handle(input) { onAction(.dictate, action) }
+        if let input = input(for: hotkeys.command), let action = commandKey.handle(input) { onAction(.command, action) }
     }
 }
