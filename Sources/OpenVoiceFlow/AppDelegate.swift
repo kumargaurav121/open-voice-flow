@@ -461,7 +461,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .transcribing: ("ellipsis", "Transcribing")
             }
         }
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+        // At rest the menu bar shows the app's own mark; other states keep their system symbols.
+        let image = symbol == "waveform"
+            ? MenuBarIcon.image(accessibilityDescription: label)
+            : NSImage(systemSymbolName: symbol, accessibilityDescription: label)
         image?.isTemplate = true
         statusItem.button?.image = image
         statusItem.button?.toolTip = label
