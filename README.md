@@ -11,21 +11,42 @@ API keys.
 
 ## Requirements
 
-- macOS 14 or later, Apple Silicon (built and tested on an M1 Pro)
-- Xcode with Swift 6 and its Metal Toolchain: `xcodebuild -downloadComponent MetalToolchain`
-- An Apple ID added in Xcode (a free Personal Team is enough to sign the app)
-- About 6.5 GB of disk for the models
+| You need | How to get it |
+|---|---|
+| A Mac with Apple Silicon (M1 or later) | Intel Macs aren't supported: the models run on the Neural Engine and GPU. |
+| macOS 14 Sonoma or later | System Settings → General → Software Update. Tested on macOS 26. |
+| Xcode (free) | [App Store](https://apps.apple.com/app/xcode/id497799835). Open it once to finish installing. Tested on Xcode 27. Command Line Tools alone aren't enough. |
+| Xcode's Metal Toolchain | Installed automatically by `scripts/install.sh` (or `xcodebuild -downloadComponent MetalToolchain`). |
+| Your own Apple ID in Xcode (free) | Xcode → Settings → Accounts → + → Apple ID, then *Manage Certificates… → + → Apple Development*. It signs the app on your Mac so macOS remembers its permissions. No paid developer account needed. |
+| About 20 GB free disk | ~7 GB of models plus the build. |
+| Internet for the first run | The models download once from Hugging Face (~6.5 GB, pinned and checksum-verified). |
 
-## Build and run
+## Install with Claude Code (easiest)
 
 ```sh
-scripts/build-app.sh            # builds, bundles and signs build/Open Voice Flow.app
-open "build/Open Voice Flow.app"
+git clone https://github.com/kumargaurav121/open-voice-flow.git
+cd open-voice-flow
+claude
 ```
 
+Then ask: **"Install this app."** Claude checks your Mac, installs what it can, walks you through the few
+clicks only you can do (installing Xcode, adding your Apple ID, allowing permissions), builds the app and
+launches it. The steps it follows are in [CLAUDE.md](CLAUDE.md).
+
+## Install by hand
+
+```sh
+scripts/install.sh
+```
+
+It checks every requirement above (and tells you exactly how to fix anything missing), builds and signs
+the app, installs it to `~/Applications/Open Voice Flow.app` and launches it. Run it again to update after
+`git pull`; your models, settings and history are kept.
+
 The first launch opens **setup**: it asks for Microphone, Accessibility and Input Monitoring, downloads
-the models from Hugging Face (pinned and checksum-verified, see ADR 0010), and lets you try a dictation.
-The first load of the speech model compiles it for your Mac's Neural Engine (up to ~15 minutes, once).
+the models (see ADR 0010), and lets you try a dictation. The first load of the speech model compiles it
+for your Mac's Neural Engine (up to ~15 minutes, once). Then set System Settings → Keyboard → "Press 🌐
+key to" → **Do Nothing**, so holding `fn` doesn't open the emoji picker.
 
 ## Using it
 

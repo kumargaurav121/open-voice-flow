@@ -29,6 +29,15 @@ if ! xcrun metal -v >/dev/null 2>&1; then
   echo "  xcodebuild -downloadComponent MetalToolchain" >&2
   exit 1
 fi
+# The toolchain is mounted at a path that changes when Xcode updates it, and SwiftPM caches the old one
+# ("unable to spawn process .../metal"). Drop the cached build plans when they point elsewhere.
+toolchain="$(xcrun -f metal | grep -o 'MetalToolchain-[^/]*' || true)"
+plans=".build/out/Intermediates.noindex/XCBuildData"
+cached="$( (grep -rhoa 'MetalToolchain-[^/"]*' "$plans" 2>/dev/null || true) | sort -u)"
+if [[ -n "$toolchain" && -n "$cached" && "$cached" != "$toolchain" ]]; then
+  echo "Metal Toolchain moved since the last build; clearing SwiftPM's cached build plans." >&2
+  rm -rf "$plans"
+fi
 
 swift build -c "$CONFIG" --product OpenVoiceFlow
 bin="$(swift build -c "$CONFIG" --show-bin-path)"
