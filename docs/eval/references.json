@@ -200,5 +200,108 @@
       "to": "Priya",
       "text": "Lunch ke liye ready ho jao."
     }
+  },
+  {
+    "id": 29,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Haan toh team, aaj ka update de deta hoon. Login wala bug finally fix ho gaya hai, Rohan ne kal raat PR merge kar diya tha. Staging pe sab theek chal raha hai, lekin production pe abhi deploy nahi kiya hai kyunki payment flow ka ek test fail ho raha hai. Main aur Priya aaj lunch ke baad usko dekh lenge. Agar sab theek raha toh shaam tak release kar denge. Ek aur cheez, client ne naya design bheja hai, Gurjeet please usko Figma pe check kar lena aur bata dena ki kitna time lagega. Kal subah standup mein baaki discuss karte hain."
+  },
+  {
+    "id": 30,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Mummy, main is weekend ghar aa raha hoon. Friday raat ki train hai, toh Saturday subah tak pahunch jaunga. Papa ko bol dena ki station lene aane ki zaroorat nahi hai, main auto le lunga. Aur haan, Neha ki birthday ke liye maine ek gift order kiya hai, woh ghar pe deliver hoga, please usko kholna mat. Sunday ko sab log saath mein lunch karte hain, kahin bahar chalenge. Monday subah wapas nikalna padega kyunki office mein ek important meeting hai. Baaki sab theek hai, kaam thoda zyada hai lekin manage ho raha hai."
+  },
+  {
+    "id": 31,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Dekho, problem yeh hai ki jab user app kholta hai toh model load hone mein bahut time lagta hai. Pehli baar toh pandrah minute tak lag jaate hain kyunki macOS model ko Neural Engine ke liye compile karta hai. Uske baad cache ho jaata hai aur kuch seconds mein load ho jaata hai. Mera idea yeh hai ki hum model ko chhota kar dein, taaki download bhi kam ho aur compile bhi jaldi ho. Lekin dhyan rakhna padega ki accuracy kharab na ho. Isliye pehle hum apne eval clips pe test karenge, aur agar word error rate same rehta hai tabhi ship karenge. Agar koi doubt ho toh mujhe Slack pe message kar dena."
+  },
+  {
+    "id": 32,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Yaar trip ka plan final kar lete hain. Hum chaar log hain, toh do rooms book karne padenge. Main soch raha tha ki Friday ko office ke baad nikal jaate hain, around seven PM, aur raat tak Jaipur pahunch jaayenge. Saturday ko fort dekhenge aur shaam ko market chalenge. Sunday subah thoda late uthenge, breakfast ke baad wapas nikal lenge taaki traffic se pehle Delhi pahunch jaayein. Har bande ka budget lagbhag paanch hazaar rupaye aayega, hotel aur petrol milake. Sab log aaj raat tak confirm kar do, phir main booking kar deta hoon."
+  },
+  {
+    "id": 33,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Honestly mujhe lagta hai ki naya onboarding flow pehle se kaafi better hai. Permissions wala step ab clear hai aur user ko pata chalta hai ki kya ho raha hai. Bas ek issue hai, download wale screen pe progress bar kabhi kabhi atak jaata hai, aur user ko lagta hai ki app hang ho gaya. Hum wahan ek chhota sa message add kar sakte hain ki slow internet pe time lag sakta hai. Aur try it wale step mein agar user ko fn key ka pata nahi hai toh woh confuse ho jaata hai. Overall good work, bas yeh do cheezein fix kar do."
+  },
+  {
+    "id": 34,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Hi Priya, kal wali meeting ke notes bhej raha hoon. Client chahta hai ki pehla version December ke end tak ready ho jaaye. Unhone teen cheezein specially boli hain: dashboard fast hona chahiye, mobile pe bhi achha dikhna chahiye, aur reports PDF mein download ho sakein. Maine unko bola hai ki hum next week tak ek rough estimate bhej denge. Tum please design ka pehla draft Wednesday tak share kar dena, aur Rohan backend ka estimate de dega. Agar kuch miss ho gaya ho toh bata dena, main client ko follow up mail bhej dunga."
+  },
+  {
+    "id": 35,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Hi everyone, here's a quick summary of where we are this week. The dictation app is now stable for daily use, and the median time from releasing the key to seeing the text is about one and a half seconds. The biggest delay comes from long dictations, because we only start transcribing after you let go. Next, we're going to transcribe while you speak, so that only the last few seconds are left at the end. We're also testing a smaller version of the Hindi model, which should make short dictations faster. If you have feedback, please reply in the thread or send me a direct message."
+  },
+  {
+    "id": 36,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Hi Mark, thanks for your time on the call yesterday. As discussed, we'll start with a two week pilot for your support team, beginning on Monday, the first of December. During the pilot, we'll set up the app on ten laptops, run a short training session, and collect feedback at the end of each week. The pilot is free, and if you decide to continue, we'll send a proposal with annual pricing. Could you please send me the names and email addresses of the people who will take part? Let me know if you have any questions."
+  },
+  {
+    "id": 37,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "So the way the new pipeline works is fairly simple. While you're holding the key, the app keeps listening for short pauses in your speech. Every time it finds one, it sends the audio before that pause to the speech model in the background. By the time you let go, most of your dictation has already been transcribed, and only the last part is left. The tricky part is choosing where to cut. If we cut in the middle of a word, the model gets confused, so we only cut when there's at least half a second of silence. We also cut anyway after about twenty five seconds, because the model reads thirty seconds at a time."
+  },
+  {
+    "id": 38,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Kal market se yeh cheezein laani hain. First, doodh. Second, bread. Third, anday. And fourth, paneer.",
+    "expected_output": "Kal market se yeh cheezein laani hain:\n1. Doodh\n2. Bread\n3. Anday\n4. Paneer"
+  },
+  {
+    "id": 39,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "For tomorrow's standup, I have three updates. One, the login bug is fixed. Two, the release notes are ready for review. Three, I'm blocked on the design for the settings page.",
+    "expected_output": "For tomorrow's standup, I have three updates:\n1. The login bug is fixed.\n2. The release notes are ready for review.\n3. I'm blocked on the design for the settings page."
+  },
+  {
+    "id": 40,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Let's meet at four, actually no, let's make it five, at the usual coffee place.",
+    "expected_output": "Let's meet at five, at the usual coffee place."
+  },
+  {
+    "id": 41,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Meeting teen baje hai, nahi nahi, chaar baje hai. Main kal Mumbai ja raha hoon, sorry, Pune ja raha hoon.",
+    "expected_output": "Meeting chaar baje hai. Main kal Pune ja raha hoon."
+  },
+  {
+    "id": 42,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Hi Rohan comma new line thanks for the update full stop new paragraph let's ship it on Friday exclamation mark",
+    "expected_output": "Hi Rohan,\nThanks for the update.\n\nLet's ship it on Friday!"
+  },
+  {
+    "id": 43,
+    "lang": "hinglish",
+    "kind": "dictation",
+    "reference": "Toh basically um main yeh bol raha tha ki ki hum log matlab hum log next week launch kar sakte hain agar agar testing time pe khatam ho jaaye.",
+    "expected_output": "Main yeh bol raha tha ki hum log next week launch kar sakte hain agar testing time pe khatam ho jaaye."
+  },
+  {
+    "id": 44,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "I actually enjoyed the demo, the new notch animation looks really smooth.",
+    "expected_output": "I actually enjoyed the demo, the new notch animation looks really smooth."
   }
 ]

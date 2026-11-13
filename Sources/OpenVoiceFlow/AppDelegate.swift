@@ -56,28 +56,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         currentDecibels: { [recorder] in recorder.currentDecibels },
         modeTitle: { [weak self] in (self?.language ?? .hinglish).displayName }
     )
-    /// Speech to text plus the dictionary and English letters: what dictation and commands share.
-    private lazy var transcription: SpeechToText = DictionarySpeechToText(
-        // Always English letters and digits, whichever model or script (user requirement).
-        wrapping: LatinScriptSpeechToText(wrapping: SelectedSpeechToText(
-            local: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel]),
-            // Only called when chosen in Settings; falls back to this Mac if it fails.
-            cloud: DeepgramSpeechToText(apiKey: { [weak self] in try self?.keys.key(for: .deepgram) },
-                                        keyterms: { [weak self] in self?.dictionary.terms ?? [] }),
-            provider: { [weak self] in self?.modes.mode.speech ?? .local },
-            log: { [weak self] in self?.log.notice($0) }
-        )),
-        // Respells names before cleanup, so the AI sees them right too.
+    /// The speech model the user chose: this Mac's, routed by language, or the cloud's.
+    private lazy var speech: SpeechToText = SelectedSpeechToText(
+        local: LanguageRoutedSpeechToText(routes: [.english: englishModel, .hinglish: hinglishModel]),
+        // Only called when chosen in Settings; falls back to this Mac if it fails.
+        cloud: DeepgramSpeechToText(apiKey: { [weak self] in try self?.keys.key(for: .deepgram) },
+                                    keyterms: { [weak self] in self?.dictionary.terms ?? [] }),
+        provider: { [weak self] in self?.modes.mode.speech ?? .local },
+        log: { [weak self] in self?.log.notice($0) }
+    )
+    private lazy var pipeline = TranscriptPipeline(
+        speech: speech,
         terms: { [weak self] in self?.dictionary.terms ?? [] },
         isEnglishWord: { EnglishWords.contains($0) }
     )
     private lazy var session = PushToTalkSession(
         recorder: recorder,
-        speechToText: CleanupSpeechToText(
-            wrapping: transcription,
+        speechToText: pipeline.dictation(
             selectedAI: { [weak self] in self?.activeCleaner },
             isCodeContext: { CodeContext.isCodeEditor(bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") },
-            timeout: .seconds(4),  // Thorough (4B) took up to 2.4 s on long eval clips
             log: { [weak self] in self?.log.notice($0) }
         ),
         inserter: inserter,
@@ -85,10 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         language: { [weak self] in self?.language ?? .hinglish },
         frontmostApp: { NSWorkspace.shared.frontmostApplication?.localizedName },
         commands: CommandParser(model: { [weak self] in self?.commandModel }, log: { [weak self] in self?.log.notice($0) }),
-        // Commands get the rules cleanup but never AI cleanup: it would add seconds, could reword the
-        // command itself, and would send it to the cloud when Cloud cleanup is on.
-        commandSpeechToText: CleanupSpeechToText(wrapping: transcription, selectedAI: { nil }, isCodeContext: { false },
-                                                 timeout: .seconds(4), log: { _ in })
+        commandSpeechToText: pipeline.commands()
     )
     /// When the command key was released, for the "parsed in under 2 s" target.
     private var commandReleasedAt: TimeInterval?

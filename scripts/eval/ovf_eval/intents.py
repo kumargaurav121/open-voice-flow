@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .normalize import normalize
-from .score import edits, sound_keys
+from .score import text_wer
 
 MAX_TEXT_WER = 0.25
 
@@ -43,11 +43,6 @@ class IntentResult:
     seconds: float | None
 
 
-def _text_wer(reference: str, hypothesis: str) -> float:
-    ref, hyp = sound_keys(normalize(reference)), sound_keys(normalize(hypothesis))
-    return edits(ref, hyp) / max(len(ref), 1)
-
-
 def score_intents(expected: Sequence[Expected], parsed: Sequence[Parsed]) -> list[IntentResult]:
     by_id = {p.id: p for p in parsed}
     results = []
@@ -65,7 +60,7 @@ def score_intents(expected: Sequence[Expected], parsed: Sequence[Parsed]) -> lis
             problems.append(f"app {intent.get('app')!r}")
         if normalize(str(intent.get("to", ""))) != normalize(e.to):
             problems.append(f"to {intent.get('to')!r}")
-        wer = _text_wer(e.text, str(intent.get("text", "")))
+        wer = text_wer(e.text, str(intent.get("text", "")))
         if wer > MAX_TEXT_WER:
             problems.append(f"text {wer:.0%} off")
         ok = not problems

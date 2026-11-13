@@ -1,6 +1,6 @@
 import pytest
 
-from ovf_eval.score import Item, Transcript, score
+from ovf_eval.score import Item, Transcript, items_in_every_run, score, text_wer
 
 
 def item(id: int, lang: str, reference: str, devanagari: str | None = None) -> Item:
@@ -97,3 +97,18 @@ def test_empty_reference_with_extra_output_is_not_a_negative_score() -> None:
 
     assert report.overall.reference_words == 0
     assert report.overall.strict_wer == 0
+
+
+def test_runs_are_compared_on_the_clips_every_run_transcribed() -> None:
+    # The eval set grew from 28 to 44 items; older runs only have the first 28.
+    items = [item(1, "en", "Ship it"), item(2, "en", "Pull it"), item(29, "hinglish", "Haan toh team")]
+    older = [Transcript(1, "ship it", 1.0), Transcript(2, "pull it", 1.0)]
+    newer = [Transcript(1, "ship it", 1.0), Transcript(2, "pull it", 1.0), Transcript(29, "haan to team", 1.0)]
+
+    assert [i.id for i in items_in_every_run(items, [older, newer])] == [1, 2]
+    assert [i.id for i in items_in_every_run(items, [newer])] == [1, 2, 29]
+
+
+def test_text_wer_ignores_spelling_variants_and_number_forms_but_counts_extra_words() -> None:
+    assert text_wer("Main zyada der se aaunga, meeting five baje hai.", "main jyada der se aunga meeting 5 baje hai") == 0
+    assert text_wer("Meet at five.", "Meet at four, actually five.") == 2 / 3

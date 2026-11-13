@@ -81,6 +81,19 @@ def sound_keys(words: Iterable[str]) -> list[str]:
     return [sound_key(w) for w in words]
 
 
+def text_wer(reference: str, hypothesis: str) -> float:
+    """Word error rate of one text against another, normalised and script-agnostic: spelling variants and
+    number forms count as the same word, missing or extra words don't."""
+    ref, hyp = sound_keys(normalize(reference)), sound_keys(normalize(hypothesis))
+    return edits(ref, hyp) / max(len(ref), 1)
+
+
+def items_in_every_run(items: Sequence[Item], runs: Sequence[Sequence[Transcript]]) -> list[Item]:
+    """The items every run transcribed, so runs from before the eval set grew compare like for like."""
+    ids = set.intersection(*({t.id for t in run} for run in runs)) if runs else set()
+    return [item for item in items if item.id in ids]
+
+
 def _is_latin(word: str) -> bool:
     return all(ch.isascii() for ch in word)
 

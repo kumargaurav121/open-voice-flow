@@ -12,7 +12,16 @@ uv run ovf-eval score --all --report ../../docs/eval/reports/$(date +%F)-bakeoff
 uv run pytest && uv run mypy ovf_eval tests
 ```
 
-New recording? Split it first with `split.py` (see `docs/eval/reading-script.md`).
+New recording? Split it first with `split.py`, naming the items it holds:
+`scripts/eval/split.py docs/eval/raw/reading-YYYYMMDD.m4a --ids 1-28` (see `docs/eval/reading-script.md`). Items
+29-44 (`docs/eval/reading-script-long.md`: long dictations and formatting cases) come from a second recording,
+cut with `--ids 29-44 --min-silence 2.8 --pad 0.4 --segments docs/eval/segments/reading-long-20261113.json`.
+Baseline: `docs/eval/reports/2026-11-13-eval-set-2-baseline.md`. `ovf-eval score` compares runs on the clips
+every run transcribed, so runs from before the set grew still compare.
+
+**Formatting** (items 38-44): `uv run ovf-eval format <run>` compares each item's final text with its
+`expected_output`: exact (ignoring case and spacing), word errors against the expected text, and layout
+(lines, paragraph breaks, list numbers).
 
 **Commands** (ticket 11): `swift run -c release EvalRunner --name app-commands --model-folder <path> --commands`
 runs clips 24-28 through the command parser and writes `<name>.intents.json`; `uv run ovf-eval intents

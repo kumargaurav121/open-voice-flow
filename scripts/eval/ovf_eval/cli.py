@@ -4,6 +4,7 @@
   ovf-eval score turbo-auto trelis-hi-mixed    # prints a comparison table
   ovf-eval score --all --report docs/eval/reports/2026-10-08-bakeoff.md
   ovf-eval intents app-commands                # parsed commands (EvalRunner --commands) vs expected parses
+  ovf-eval format baseline-oriserve            # final text of the formatting items vs their expected output
 """
 
 import argparse
@@ -13,9 +14,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from .formatting import ExpectedFormat, score_formatting
 from .intents import MAX_TEXT_WER, Expected, Parsed, score_intents
 from .runners import CONFIGS
-from .score import Item, Report, Transcript, score
+from .score import Item, Report, Transcript, items_in_every_run, score
 
 EVAL = Path(__file__).resolve().parents[3] / "docs" / "eval"
 CLIPS = EVAL / "clips"
@@ -62,7 +64,9 @@ LANGUAGES = ["en", "hi", "hinglish"]
 
 
 def _words(reports: dict[str, Report], lang: str) -> int:
-    return next(iter(reports.values())).by_language[lang].reference_words
+    # A subset of the clips (runs compared on what they share) may have no clips in a language.
+    found = next(iter(reports.values())).by_language.get(lang)
+    return found.reference_words if found else 0
 
 
 def _table(reports: dict[str, Report]) -> str:
@@ -121,7 +125,12 @@ here is strict WER where script can't bias the comparison:
 
 
 def score_command(names: list[str], *, devanagari: bool, report: Path | None, force: bool) -> None:
-    items = _items()
+    all_items = _items()
+    items = items_in_every_run(all_items, [_load(name) for name in names])
+    if not items:
+        raise SystemExit("these runs have no clips in common; score them separately")
+    if len(items) < len(all_items):
+        print(f"Scoring the {len(items)} of {len(all_items)} clips every run transcribed.\n")
     reports = {name: score(items, _load(name), devanagari_references=devanagari) for name in names}
     print(_table(reports))
     if report:
@@ -152,6 +161,28 @@ def intents_command(name: str) -> None:
           f"lenient: {sum(r.ok for r in results)}/{len(results)} with text within {MAX_TEXT_WER:.0%} WER")
 
 
+def format_command(name: str) -> None:
+    references = json.loads((EVAL / "references.json").read_text())
+    expected = [ExpectedFormat(r["id"], r["expected_output"]) for r in references if r.get("expected_output")]
+    if not (TRANSCRIPTS / f"{name}.json").exists():
+        raise SystemExit(f"no saved transcripts for {name}")
+    results = score_formatting(expected, _load(name))
+    print("| Clip | Exact | Similarity | Words WER | Layout |\n|---|---|---|---|---|")
+    for r in results:
+        if r.actual is None:
+            print(f"| {r.id} | no transcript | - | - | - |")
+            continue
+        print(f"| {r.id} | {'pass' if r.exact else 'FAIL'} | {r.similarity:.2f} | {r.words_wer:.0%} | "
+              f"{'pass' if r.layout_ok else 'FAIL'} |")
+    for r in results:
+        if not r.exact and r.actual is not None:
+            print(f"\n{r.id} expected:\n{r.expected}\n{r.id} got:\n{r.actual}")
+    scored = [r for r in results if r.actual is not None]
+    missing = f" ({len(results) - len(scored)} without a transcript)" if len(scored) < len(results) else ""
+    print(f"\nexact: {sum(r.exact for r in scored)}/{len(scored)}; "
+          f"layout: {sum(r.layout_ok for r in scored)}/{len(scored)}{missing}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ovf-eval")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -166,12 +197,16 @@ def main() -> None:
     score_parser.add_argument("--force", action="store_true", help="overwrite an existing report")
     intents_parser = sub.add_parser("intents", help="score parsed commands against the expected parses")
     intents_parser.add_argument("name")
+    format_parser = sub.add_parser("format", help="final text of the formatting items vs their expected output")
+    format_parser.add_argument("name")
     args = parser.parse_args()
 
     if args.command == "run":
         run(args.configs)
     elif args.command == "intents":
         intents_command(args.name)
+    elif args.command == "format":
+        format_command(args.name)
     else:
         saved = sorted(p.stem for p in TRANSCRIPTS.glob("*.json") if not p.name.endswith(".intents.json"))
         names = saved if args.all else args.configs

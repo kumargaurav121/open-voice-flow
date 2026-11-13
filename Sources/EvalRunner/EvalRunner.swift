@@ -70,14 +70,11 @@ struct EvalRunner {
         let speech: SpeechToText = useDeepgram
             ? DeepgramSpeechToText(apiKey: { envKey(.deepgram) }, keyterms: { dictionary })
             : whisper
-        let transcriber = CleanupSpeechToText(
-            // Same spell check as the app: real English words are never respelled.
-            wrapping: DictionarySpeechToText(wrapping: LatinScriptSpeechToText(wrapping: speech), terms: { dictionary },
-                                             isEnglishWord: { EnglishWords.contains($0) }),
-            selectedAI: { cleaner },
-            isCodeContext: { false }, timeout: .seconds(5),
-            log: { print("     cleanup: \($0)") }
-        )
+        // The app's own pipeline, so the transcripts are exactly what the app would paste (into a non-code app).
+        let pipeline = TranscriptPipeline(speech: speech, terms: { dictionary }, isEnglishWord: { EnglishWords.contains($0) })
+        let transcriber = pipeline.dictation(selectedAI: { cleaner }, isCodeContext: { false },
+                                             log: { print("     cleanup: \($0)") })
+        let commandTranscriber = pipeline.commands()
         let trimmer = SilenceTrimmer()
         let clock = ContinuousClock()
 
@@ -103,7 +100,7 @@ struct EvalRunner {
                 var text = ""
                 var intent: CommandIntent?
                 let elapsed = try await clock.measure {
-                    text = try await transcriber.transcribe(clip, language: language)
+                    text = try await commandTranscriber.transcribe(clip, language: language)
                     intent = await parser.parse(text)
                 }
                 let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
