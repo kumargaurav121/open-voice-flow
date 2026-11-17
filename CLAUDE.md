@@ -30,8 +30,9 @@ do, and for the rest give short numbered GUI steps, then wait for them to say it
    - *Preparing*: macOS compiles the speech model for their Neural Engine once, up to ~15 minutes. The
      progress bar is an estimate; slow is normal.
    - Try it: click the box, hold `fn`, speak, release.
-3. **Set the fn key**: System Settings → Keyboard → "Press 🌐 key to" → **Do Nothing** (otherwise fn opens
-   the emoji picker or starts Apple's dictation).
+3. **The fn key**: while it runs, the app holds System Settings → Keyboard → "Press 🌐 key to" at **Do
+   Nothing** itself (and puts the user's setting back on quit), so fn doesn't open the emoji picker or start
+   Apple's dictation. Nothing to do unless the log says it couldn't (then set it by hand).
 4. **Confirm it works**: they open TextEdit, hold `fn`, say a sentence, and the text appears. That is the
    install's completion criterion.
 
@@ -42,6 +43,7 @@ error).
 | Symptom | Fix |
 |---|---|
 | Holding fn does nothing | Input Monitoring is off or was reset: re-allow it via *Setup Guide…* in the menu, then quit and reopen the app. |
+| Tapping fn opens the emoji picker or starts Apple's Dictation | The app holds "Press 🌐 key to" at Do Nothing while it runs; the log says if this macOS doesn't allow it. Set System Settings → Keyboard → "Press 🌐 key to" → **Do Nothing** by hand, and under Dictation change the Shortcut away from the 🌐 key (or turn Dictation off). |
 | Text doesn't appear, or "Couldn't paste" | Accessibility is off: re-allow it. After a rebuild macOS can ask again. |
 | Build fails with `unable to spawn process …/metal` | `scripts/build-app.sh` clears this automatically; if it persists, `rm -rf .build/out/Intermediates.noindex/XCBuildData` and rebuild. |
 | Download stopped | Click *Try Again*: it resumes where it stopped. After a checksum failure that model's download is deleted and fetched fresh. |

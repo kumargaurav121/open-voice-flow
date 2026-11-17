@@ -13,7 +13,7 @@ Decisions behind this spec are recorded in [`adr/`](adr/). Anything deferred liv
 
 ## 2. Non-goals (v1)
 
-Live/streaming transcription, hands-free sessions, conversational agent, multiple Modes, per-app tone, auto-learned dictionary, agent-loop automation, browser Slack, Intel Macs, telemetry, hosted backend. See ROADMAP.
+Live preview of the words while speaking, conversational agent, multiple Modes, per-app tone, auto-learned dictionary, agent-loop automation, browser Slack, Intel Macs, telemetry, hosted backend. See ROADMAP.
 
 ## 3. Platform
 
@@ -29,10 +29,11 @@ Live/streaming transcription, hands-free sessions, conversational agent, multipl
 | Action | Default | Behaviour |
 |---|---|---|
 | Dictate | hold `fn` | Record while held; on release → transcribe → clean up → insert at cursor |
+| Hands-free | double-tap `fn` | Record without holding (lock and timer in the notch); the next tap of `fn` → transcribe → insert; stops by itself after 10 min |
 | Command | hold Right `⌥` | Record while held; on release → transcribe → parse intent → run action |
 | Cancel | `Esc` | Cancel recording, processing, or a running action at any step |
 
-Push-to-talk only. Very short presses (< ~250 ms) are ignored. In Settings → General, Dictate and Command can each be any of fn, Right ⌥, Right ⌘, Right ⌃, Right ⇧ (held alone, so they never type or clash with app shortcuts); the two must differ. Cancel isn't rebindable: Esc, or any other key pressed while a hotkey is held.
+Very short presses (< ~250 ms) are ignored, except that two quick taps of the dictation key (the second within 0.35 s of the first's release) start hands-free. While it runs, the dictation key's clean tap stops it, other keys and key combinations are ignored, and Esc discards it. While fn is a hotkey, the app holds macOS's "Press 🌐 key to" at Do Nothing (its own action can't be swallowed: macOS runs it ahead of every event tap) and puts the user's setting back on quit. In Settings → General, Dictate and Command can each be any of fn, Right ⌥, Right ⌘, Right ⌃, Right ⇧ (held alone, so they never type or clash with app shortcuts); the two must differ. Cancel isn't rebindable: Esc, or any other key pressed while a hotkey is held.
 
 ### 4.2 Dictation pipeline
 
@@ -148,7 +149,7 @@ App         Menu bar, hotkeys (CGEventTap), wiring (onboarding services), Settin
 EvalRunner  Dev tool: runs the app's pipeline (Audio + STT + cleanup) over the eval clips for scripts/eval (not shipped)
 ```
 
-- A **Session** = one hotkey press: start → audio → transcript → result (insert or action) → end. Future hands-free / conversational modes are new session kinds, not a rewrite.
+- A **Session** = one hotkey press: start → audio → transcript → result (insert or action) → end. Hands-free dictation (v2 ticket 04) is a state of a dictation session, not a new kind; conversational modes would be new session kinds, not a rewrite.
 - Every step sits behind a protocol so it can be tested with fakes. A future hosted (paid) service is just another `SpeechToText` / `TextCleaner`.
 - Packages are added by the ticket that first needs them (NotchUI in 04, LLM in 05, ModelStore and Onboarding in 07, History in 09, Actions in 11) rather than created empty up front.
 

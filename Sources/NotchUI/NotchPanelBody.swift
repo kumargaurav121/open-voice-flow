@@ -349,13 +349,14 @@ private struct StatusBadge: View {
         case .command(.unknown): "questionmark"
         case .sent(_, let confirmed): confirmed ? "checkmark" : "exclamationmark"
         case .stopped: "xmark"
+        case .listening(.handsFree): "lock.fill"
         default: "mic.fill"
         }
     }
 
     private var tint: Color {
         switch phase {
-        case .listening(.dictation): .orange
+        case .listening(.dictation), .listening(.handsFree): .orange
         case .listening(.command): .cyan
         case .transcribing, .idle: .white
         case .inserted: .green

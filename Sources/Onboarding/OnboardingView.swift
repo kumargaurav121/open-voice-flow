@@ -81,7 +81,8 @@ struct OnboardingView: View {
                 TryItBox(dictated: dictated)
             }
         case .finished:
-            StepLayout(symbol: "checkmark.circle", title: "You're All Set", message: "Hold fn anywhere to dictate.") {
+            StepLayout(symbol: "checkmark.circle", title: "You're All Set",
+                       message: "Hold fn anywhere to dictate, or double-tap it to dictate hands-free and tap it again to stop. While Open Voice Flow runs, tapping fn won't open the emoji picker; your setting comes back when you quit.") {
                 EmptyView()
             }
         }

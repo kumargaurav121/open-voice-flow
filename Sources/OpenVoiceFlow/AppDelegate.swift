@@ -51,6 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var history = HistoryModel(store: try? HistoryStore())
     private lazy var historyWindow = HistoryWindow(model: history)
     private let recorder = MicRecorder()
+    /// macOS's "Press 🌐 key to" setting, held at Do Nothing while fn is a hotkey.
+    private lazy var globeKey = SystemGlobeKey.action()
     /// macOS's own "Pop", quietly: heard, not intrusive.
     private lazy var popSound: NSSound? = {
         let sound = NSSound(named: "Pop")
@@ -164,7 +166,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Side effects of a Mode change, from the menu or Settings.
+    /// While fn is a hotkey, macOS's own 🌐 action (the emoji picker) is held off, so tapping fn (as in the
+    /// hands-free double tap) doesn't also open it; the user's setting comes back when fn isn't used or on quit.
+    private func holdGlobeKey() {
+        let hotkeys = modes.mode.hotkeys
+        guard hotkeys.dictate == .fn || hotkeys.command == .fn else {
+            globeKey.giveBack()
+            return
+        }
+        guard SystemGlobeKey.isAvailable else {
+            log.notice("Can't hold off the 🌐 key's own action on this macOS; set System Settings → Keyboard → \"Press 🌐 key to\" → Do Nothing")
+            return
+        }
+        if let original = globeKey.take() {
+            log.notice("Holding the 🌐 key's own action at Do Nothing while fn is a hotkey (it was \(original); put back on quit)")
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        globeKey.giveBack()
+    }
+
     private func modeChanged(from old: Mode, to new: Mode) {
+        if new.hotkeys != old.hotkeys { holdGlobeKey() }
         if new.language != old.language { loadModel() }  // the other language's model loads on first switch
         if new.cleanup != old.cleanup {
             // The command model stays once used, so the next command isn't a cold ~1 GB load.
@@ -177,6 +201,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         LLMCleaner.configureGPU()
         recorder.onNote = { [weak self] in self?.log.notice($0) }
+        globeKey.recover()  // after a run that didn't quit cleanly
+        holdGlobeKey()
         recorder.prepare()  // so pressing the key only switches the microphone on
         let menu = NSMenu()
         menu.delegate = self
@@ -204,7 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .release:
                 if kind == .command { commandReleasedAt = ProcessInfo.processInfo.systemUptime }
                 Task { await self.session.keyUp() }
-            case .cancel: Task { await self.session.cancel() }
+            case .cancel: Task { await self.session.chord() }
             }
         }
 
@@ -423,7 +449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func handle(_ event: SessionEvent) {
         switch event {
-        case .listening:
+        case .listening, .handsFree:
             status = .listening
         case .released:
             // After the microphone stopped, so the click isn't recorded.

@@ -5,6 +5,8 @@ import Foundation
 public struct NotchStateMachine: Sendable {
     public enum Mode: Sendable, Equatable {
         case dictation
+        /// Dictation that keeps recording without the key held (double tap); shows a lock.
+        case handsFree
         /// The command hotkey; gets its own colour.
         case command
     }
@@ -86,6 +88,8 @@ public struct NotchStateMachine: Sendable {
         case .session(.commandUnknown):
             phase = .command(.unknown)
             return scheduleReturn(after: Self.commandHold)
+        case .session(.handsFree):
+            phase = .listening(.handsFree)
         case .session(.released):
             break  // the sound acknowledges it; the notch moves on at .transcribing
         case .session(.transcribing):

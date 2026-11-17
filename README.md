@@ -45,16 +45,18 @@ the app, installs it to `~/Applications/Open Voice Flow.app` and launches it. Ru
 
 The first launch opens **setup**: it asks for Microphone, Accessibility and Input Monitoring, downloads
 the models (see ADR 0010), and lets you try a dictation. The first load of the speech model compiles it
-for your Mac's Neural Engine (up to ~15 minutes, once). Then set System Settings → Keyboard → "Press 🌐
-key to" → **Do Nothing**, so holding `fn` doesn't open the emoji picker.
+for your Mac's Neural Engine (up to ~15 minutes, once). While the app runs with `fn` as a hotkey, it switches
+the 🌐 key's own action (System Settings → Keyboard → "Press 🌐 key to", the emoji picker by default) to Do
+Nothing, so tapping `fn` doesn't also open it; your setting comes back when the app quits.
 
 ## Using it
 
 | | |
 |---|---|
 | **Dictate** | Hold `fn`, speak, release. Text goes into the focused field. |
+| **Hands-free** | Double-tap `fn`, speak as long as you like (the notch shows a lock and a timer), tap `fn` again to paste. `Esc` throws it away; it stops by itself after 10 minutes. |
 | **Command** | Hold Right `⌥`, say e.g. *"Message Priya saying the deck is ready"* or *"Gurjeet ko message karo ki main meeting mein hoon"*. The notch shows the steps as Slack opens, finds the person, opens the DM and writes the message, then counts down 3 s before sending. Unknown commands say "Can't do that yet" and copy the transcript; nothing is ever typed. |
-| **Stop** | `Esc`: cancels a recording, a command being understood, or an action at any step before the send. |
+| **Stop** | `Esc`: cancels a recording (hands-free too), a dictation not yet pasted, a command being understood, or an action at any step before the send. |
 
 The menu bar icon has **Language** (Hinglish / English), **AI Cleanup** (Off / Fast / Thorough / Cloud),
 **Recent** and **History…**, and **Settings…** (hotkeys, send countdown, providers and keys, dictionary,

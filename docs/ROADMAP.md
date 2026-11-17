@@ -26,7 +26,7 @@ v1 scope is defined in [`SPEC.md`](SPEC.md). Everything below is deliberately **
 
 Two related ideas, both built as new **session kinds** on the existing pipeline:
 
-- **Hands-free session**: tap once, speak freely for minutes; text keeps flowing in, pauses become sentence breaks. Ends on tap or long silence.
+- **Hands-free session**: shipped in v2 ticket 04 as double-tap `fn` to start, tap to stop, 10-minute cap (no stop on silence, so pauses to think are fine). Still to come: text flowing into the app while speaking.
 - **Conversational agent**: chained commands with memory — "message Gurjeet I'm late… also tell Priya… now open Linear and create a ticket for it." Needs conversation state, multi-action plans and per-step confirmation rules.
 
 ## Later — Smarter automation

@@ -88,5 +88,5 @@ On a first install the setup window opens (reopen it any time: menu bar icon →
   2. Download the models (about 5.5 GB, pinned and checksum-verified).
   3. Wait for the one-time "Preparing" step (up to ~15 minutes the first time).
   4. Try a dictation: hold fn, speak, let go.
-Tip: set System Settings → Keyboard → "Press 🌐 key to" → "Do Nothing", so fn doesn't open the emoji picker.
+Hands-free: double-tap fn, speak, tap fn again. While the app runs, tapping fn won't open the emoji picker.
 EOF

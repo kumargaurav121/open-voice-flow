@@ -74,6 +74,7 @@ struct NotchView: View {
     private var accessibilityLabel: String {
         switch model.phase {
         case .idle: ""
+        case .listening(.handsFree): "Listening, hands-free"
         case .listening: "Listening"
         case .transcribing: "Transcribing"
         case .inserted: "Text inserted"

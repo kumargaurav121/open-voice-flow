@@ -7,6 +7,8 @@ import SwiftUI
 public final class NotchController {
     private var machine = NotchStateMachine()
     private var waveform = WaveformLevels()
+    /// A `.listening` waiting for the panel to move screens; later events wait behind it, keeping their order.
+    private var listeningPending = false
     private let model = NotchViewModel()
     private let panel: NotchPanel
     private let currentDecibels: @MainActor () -> Float
@@ -28,7 +30,11 @@ public final class NotchController {
 
     public func handle(_ event: SessionEvent) {
         guard case .listening = event else {
-            apply(.session(event))
+            if listeningPending {
+                DispatchQueue.main.async { [weak self] in self?.apply(.session(event)) }
+            } else {
+                apply(.session(event))
+            }
             return
         }
         // We're a menu-bar app, so the frontmost app is the one being dictated into.
@@ -40,7 +46,11 @@ public final class NotchController {
         if moveToActiveScreen(target) {
             // Let the jump to the new screen render first, so the panel grows out of the right notch
             // instead of sliding over from the old position.
-            DispatchQueue.main.async { [weak self] in self?.apply(.session(event)) }
+            listeningPending = true
+            DispatchQueue.main.async { [weak self] in
+                self?.listeningPending = false
+                self?.apply(.session(event))
+            }
         } else {
             apply(.session(event))
         }

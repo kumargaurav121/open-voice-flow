@@ -159,4 +159,13 @@ struct NotchStateMachineTests {
         #expect(notch.phase == .listening(.dictation))
         #expect(effect == nil)
     }
+
+    @Test func handsFreeShowsAsListeningWithALock() {
+        var notch = NotchStateMachine()
+        notch.handle(.session(.listening(.dictation)))
+
+        notch.handle(.session(.handsFree))
+
+        #expect(notch.phase == .listening(.handsFree))
+    }
 }
