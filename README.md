@@ -18,8 +18,8 @@ API keys.
 | Xcode (free) | [App Store](https://apps.apple.com/app/xcode/id497799835). Open it once to finish installing. Tested on Xcode 27. Command Line Tools alone aren't enough. |
 | Xcode's Metal Toolchain | Installed automatically by `scripts/install.sh` (or `xcodebuild -downloadComponent MetalToolchain`). |
 | Your own Apple ID in Xcode (free) | Xcode → Settings → Accounts → + → Apple ID, then *Manage Certificates… → + → Apple Development*. It signs the app on your Mac so macOS remembers its permissions. No paid developer account needed. |
-| About 20 GB free disk | ~7 GB of models plus the build. |
-| Internet for the first run | The models download once from Hugging Face (~6.5 GB, pinned and checksum-verified). |
+| About 20 GB free disk | ~6 GB of models plus the build. |
+| Internet for the first run | The models download once from Hugging Face (~5.5 GB, pinned and checksum-verified). |
 
 ## Install with Claude Code (easiest)
 

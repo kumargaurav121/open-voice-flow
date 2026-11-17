@@ -160,6 +160,29 @@ struct ModelDownloaderTests {
 
         #expect(!store.isInstalled(newer))
     }
+    @Test func removesModelFoldersNoBuiltInModelUsesAnymore() async throws {
+        let store = ModelDownloader(root: root, transport: transport())
+        var superseded = manifest()
+        superseded.folderName = "old-model"
+        try await store.install(manifest()) { _ in }
+        try await store.install(superseded) { _ in }
+
+        let removed = store.removeOtherModels(keeping: [manifest()])
+
+        #expect(removed == ["old-model"])
+        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "old-model").path))
+        #expect(store.isInstalled(manifest()))
+    }
+
+    @Test func leavesFoldersItDidNotCreateAlone() async throws {
+        let store = ModelDownloader(root: root, transport: transport())
+        let notes = root.appending(path: "notes")
+        try FileManager.default.createDirectory(at: notes, withIntermediateDirectories: true)
+        try Data("mine".utf8).write(to: notes.appending(path: "todo.txt"))
+
+        #expect(store.removeOtherModels(keeping: [manifest()]).isEmpty)
+        #expect(FileManager.default.fileExists(atPath: notes.appending(path: "todo.txt").path))
+    }
 }
 
 final class ProgressRecorder: @unchecked Sendable {

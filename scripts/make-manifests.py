@@ -22,8 +22,10 @@ PROVENANCE = ["ATTRIBUTION.md", "SOURCE-SHA256SUMS", "LICENSE"]
 
 # id, folder, repo, revision, subfolder in the repo, allow-list, license
 MODELS = [
-    ("whisper-turbo", "whisper-turbo", "argmaxinc/whisperkit-coreml",
-     "0f63a7800b00dd0226abd051b906c246e1907482", "openai_whisper-large-v3-v20240930_turbo", COREML, "MIT"),
+    # Argmax's compressed (mixed-bit) turbo: the full-size encoder (1.2 GB) is no longer accepted by the Neural
+    # Engine on our M1 Pro and runs on the CPU at about 2 s a dictation; this one runs there (v2 ticket 18).
+    ("whisper-turbo", "whisper-turbo-632mb", "argmaxinc/whisperkit-coreml",
+     "0f63a7800b00dd0226abd051b906c246e1907482", "openai_whisper-large-v3-v20240930_turbo_632MB", COREML, "MIT"),
     # Turbo's tokenizer, from OpenAI's own repo (the files WhisperKit would fetch itself).
     ("whisper-turbo-tokenizer", "whisper-turbo-tokenizer", "openai/whisper-large-v3",
      "06f233fe06e710322aca913c1bc4249a0d71fce1", "", ["tokenizer.json", "tokenizer_config.json", "config.json"],

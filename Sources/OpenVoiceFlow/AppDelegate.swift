@@ -351,7 +351,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             services: OnboardingServices(
                 permissions: { SystemPermissions.current() },
                 request: { SystemPermissions.request($0) },
-                downloadModels: { [downloader] progress in try await downloader.installAll(BuiltInModels.all, progress: progress) },
+                downloadModels: { [downloader, log] progress in
+                    try await downloader.installAll(BuiltInModels.all, progress: progress)
+                    // A model an update replaced (e.g. the compressed English model) frees its space.
+                    for name in downloader.removeOtherModels(keeping: BuiltInModels.all) {
+                        log.notice("Removed the replaced model \(name)")
+                    }
+                },
                 prepareModels: { [weak self] in try await self?.prepareForOnboarding() },
                 markComplete: { [weak self] in self?.onboardingComplete = true }
             ),

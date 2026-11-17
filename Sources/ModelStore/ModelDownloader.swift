@@ -40,6 +40,26 @@ public final class ModelDownloader: Sendable {
         return manifest.files.allSatisfy { size(of: folder.appending(path: $0.path)) == $0.size }
     }
 
+    /// Deletes model folders that none of `manifests` uses anymore (a model replaced by an update), and returns
+    /// their names. Only folders this store created (with its marker or verified list) are touched.
+    @discardableResult
+    public func removeOtherModels(keeping manifests: [ModelManifest]) -> [String] {
+        let fileManager = FileManager.default
+        let kept = Set(manifests.map(\.folderName))
+        let folders = (try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        var removed: [String] = []
+        for folder in folders.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
+        where !kept.contains(folder.lastPathComponent) {
+            let ours = [Self.markerName, Self.verifiedName].contains {
+                fileManager.fileExists(atPath: folder.appending(path: $0).path)
+            }
+            if ours, (try? fileManager.removeItem(at: folder)) != nil {
+                removed.append(folder.lastPathComponent)
+            }
+        }
+        return removed
+    }
+
     public func install(_ manifest: ModelManifest, progress: @escaping @Sendable (DownloadProgress) -> Void) async throws {
         try await installAll([manifest], progress: progress)
     }

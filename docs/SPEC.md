@@ -115,7 +115,7 @@ Hand-edited list of words/names (e.g. "Gurjeet", product names), edited in Setti
 Guided window, one step at a time. It opens on first launch and whenever a pinned model is missing (e.g. after an update pins a new one), and can be reopened from the menu ("Setup Guide…"):
 1. Welcome.
 2. Permissions with a live ✓ each and an Allow… button (system prompt, else the right System Settings pane): Microphone, Accessibility (insert text, drive apps), Input Monitoring (`fn` key event tap).
-3. Download of **everything** from **Hugging Face** (~6.5 GB: Whisper turbo 1.6 GB, the Hinglish model 1.6 GB, cleanup Fast 1.0 GB and Thorough 2.3 GB): progress with time left, resumable after quitting or a dropped connection (Try Again), every file SHA-256-verified against the manifest built into the app (ADR 0010), stored in `~/Library/Application Support/open-voice-flow/models/`.
+3. Download of **everything** from **Hugging Face** (~5.5 GB: Whisper turbo, Argmax's compressed build, 0.65 GB; the Hinglish model 1.6 GB; cleanup Fast 1.0 GB and Thorough 2.3 GB): progress with time left, resumable after quitting or a dropped connection (Try Again), every file SHA-256-verified against the manifest built into the app (ADR 0010), stored in `~/Library/Application Support/open-voice-flow/models/`.
 4. Preparing: the first load, where Core ML compiles the speech models for this Mac's Neural Engine (up to ~15 min once, cached afterwards), shown as an estimated progress bar with elapsed time.
 5. "Try it": Done unlocks once a dictation has gone through the real pipeline (Skip available).
 
