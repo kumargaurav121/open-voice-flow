@@ -88,9 +88,9 @@ Release to text, Hinglish model, same session, audio played at speaking pace:
 - **Short clips got a little faster too.** The part is transcribed during the pause before release.
 
 **Caveat: absolute times are inflated.**
-- The runner's encoder is still 2-3 times slower than the app's log for the same model, as ticket 01 found.
-- It is **not** macOS media analysis: clips 1-3 were re-timed with `mediaanalysisd` idle and still took 2.0 s against October's 0.82-0.85 s. The cause remains unknown.
-- Both columns ran in the same session, so the comparison holds. The app's own times should be lower. The real-use acceptance comes from the app log: dictations of 20 s or more at about 1.6 s median, short ones no slower than 1.13 s.
+- On this Mac, since mid-November, Core ML runs both 1.2 GB encoders on the CPU instead of the Neural Engine. That is in the app too, not only the runner (see the update in the ticket 01 report).
+- Each 30-second window costs about 1.7-2 s instead of about 0.6 s. Both columns ran in the same session, so the comparison holds.
+- The real-use acceptance (dictations of 20 s or more at about 1.6 s median in the app log) can't be judged until the encoders run on the Neural Engine again.
 
 Runs: `v2-02-speed-whole`, `v2-02-speed-realtime`.
 

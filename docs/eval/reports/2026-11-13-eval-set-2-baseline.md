@@ -88,7 +88,13 @@ Run with `ovf-eval format <run>`. Three measures:
 | 40 s or more | 7 | 4.26 s |
 | **all** | **132** | **1.43 s (p90 3.00 s, nearest rank)** |
 
-**The eval runner's timings today don't match the app, and the cause isn't known.**
+**Update (2026-11-17): it isn't the runner, it's the Mac.**
+- The app's own log shows the same slowdown. The Hinglish model's encoder took 0.62-0.70 s per window from 8 October to 5 November, then 1.73 s on 16 November.
+- Core ML's compute plan (`MLComputePlan`) now puts every operation of both 1.2 GB encoders on the CPU, though the app asks for the Neural Engine. The same plan puts the decoders, the mel step and the 168 MB Whisper small encoder on the Neural Engine. A fresh copy of the encoder at a new path is refused too.
+- The model files are unchanged since 9 October, and macOS hasn't been updated since September. The Neural Engine's logs need admin rights, so the cause isn't known yet.
+- Until it's fixed, every dictation pays about 1-1.5 s more than in October, and runner timings stay comparable only within one session.
+
+**The eval runner's timings today don't match the app's earlier ones:**
 - **What we saw:**
   - The encoder took about 1.7-1.9 s per 30-second window, for both models, in every run today.
   - In October, the same runner on the same model took 0.82-0.85 s in total for each of clips 1-3. The app's last long dictation (5 November) encoded at 0.61 s per window.
