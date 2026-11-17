@@ -94,6 +94,9 @@ public struct NotchStateMachine: Sendable {
             break  // the sound acknowledges it; the notch moves on at .transcribing
         case .session(.transcribing):
             phase = .transcribing
+        case .session(.modelLoading(let language)):
+            phase = .error(.modelLoading(language), expanded: false)
+            return scheduleReturn(after: Self.errorHold)
         case .session(.inserted):
             phase = .inserted
             return scheduleReturn(after: Self.insertedHold)
@@ -206,6 +209,12 @@ public struct NotchError: Sendable, Equatable {
     public init(message: String, details: String) {
         self.message = message
         self.details = details
+    }
+
+    /// A press while the speech model was still loading: nothing was recorded.
+    public static func modelLoading(_ language: Language) -> NotchError {
+        NotchError(message: "\(language.displayName) model still loading",
+                   details: "Nothing was recorded. The first time, macOS prepares the model for this Mac's Neural Engine, which can take a few minutes; after that it loads in seconds. Try again when the menu bar icon is back to normal.")
     }
 
     public init(_ failure: SessionFailure) {

@@ -168,4 +168,22 @@ struct NotchStateMachineTests {
 
         #expect(notch.phase == .listening(.handsFree))
     }
+
+    @Test func aPressWhileTheModelIsLoadingSaysSoBriefly() {
+        var notch = NotchStateMachine()
+
+        let effect = notch.handle(.session(.modelLoading(.hinglish)))
+
+        guard case .error(let notice, expanded: false) = notch.phase else {
+            Issue.record("expected a short message")
+            return
+        }
+        #expect(notice.message == "Hinglish model still loading")
+        #expect(notice.details.count > notice.message.count)
+        guard case .returnToIdle(let delay, _) = effect else {
+            Issue.record("expected a scheduled return to idle")
+            return
+        }
+        #expect(delay == NotchStateMachine.errorHold)
+    }
 }

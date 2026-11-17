@@ -17,6 +17,8 @@ public enum SessionEvent: Equatable, Sendable {
     /// release sound). Not for an accidental tap or a cancel.
     case released(SessionKind)
     case transcribing
+    /// A press while the speech model for this language is still loading: nothing was recorded.
+    case modelLoading(Language)
     case inserted(SessionTimings)
     /// A command understood as a known action (not run yet; ticket 12).
     case commandParsed(CommandIntent)

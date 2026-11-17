@@ -203,4 +203,41 @@ struct PushToTalkSessionTests {
 
         #expect(!events.contains(.released(.dictation)))
     }
+
+    @Test func aPressWhileTheSpeechModelIsLoadingDoesNotRecordAndSaysSo() async {
+        stt.transcript = "Never heard."
+        let session = PushToTalkSession(recorder: recorder, speechToText: stt, inserter: inserter, now: clock.now,
+                                        language: { .hinglish }, speechReady: { $0 == .english })
+        var events: [SessionEvent] = []
+        session.onEvent = { events.append($0) }
+
+        session.keyDown()
+        clock.advance(by: 1.0)
+        await session.keyUp()
+
+        #expect(events == [.modelLoading(.hinglish)])
+        #expect(recorder.startCount == 0)
+        #expect(stt.requests.isEmpty)
+    }
+
+    @Test func escapeWhileTranscribingEndsTheSessionAtOnce() async {
+        let model = GatedSpeechToText()
+        let session = PushToTalkSession(recorder: recorder, speechToText: model, inserter: inserter, now: clock.now,
+                                        language: { .hinglish })
+        var events: [SessionEvent] = []
+        session.onEvent = { events.append($0) }
+
+        session.keyDown()
+        clock.advance(by: 1.0)
+        let release = Task { await session.keyUp() }
+        for _ in 0..<1000 where !model.isHolding { await Task.yield() }
+        await session.cancel()  // the model is still busy (e.g. loading)
+
+        #expect(events.last == .ignored(.cancelled))
+        model.open()
+        await release.value
+        #expect(events.filter { $0 == .ignored(.cancelled) }.count == 1)  // nothing more when it finishes
+        #expect(inserter.inserted.isEmpty)
+    }
 }
+

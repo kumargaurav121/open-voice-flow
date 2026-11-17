@@ -61,12 +61,17 @@ public final class PushToTalkSession {
     /// `speechToText`, which returns the dictation's text.
     private let live: LiveTranscriber?
     private let handsFreeLimit: TimeInterval
+    private let speechReady: (Language) -> Bool
     private var state = State.idle
     /// Esc pressed while a command was being transcribed or understood: its result is dropped.
     private var commandCancelled = false
     private var processingCommand = false
     /// Esc pressed after a dictation was released, before its text was pasted.
     private var dictationCancelled = false
+    /// Until the text is pasted or the command's result shown, Esc drops it. It's reported at once, since the
+    /// work still running can take a while (a model still loading); that work ends silently.
+    private var canStillCancel = false
+    private var cancelled: Bool { dictationCancelled || commandCancelled }
     /// When the last dictation tap (too short to be a press) was released: a quick tap soon after starts
     /// hands-free.
     private var tapReleasedAt: TimeInterval?
@@ -82,7 +87,8 @@ public final class PushToTalkSession {
         commands: CommandParser? = nil,
         commandSpeechToText: SpeechToText? = nil,
         live: LiveTranscriber? = nil,
-        handsFreeLimit: TimeInterval = PushToTalkSession.handsFreeLimit
+        handsFreeLimit: TimeInterval = PushToTalkSession.handsFreeLimit,
+        speechReady: @escaping (Language) -> Bool = { _ in true }
     ) {
         self.recorder = recorder
         self.speechToText = speechToText
@@ -94,6 +100,7 @@ public final class PushToTalkSession {
         self.commandSpeechToText = commandSpeechToText
         self.live = live
         self.handsFreeLimit = handsFreeLimit
+        self.speechReady = speechReady
     }
 
     public func keyDown(_ kind: SessionKind = .dictation) {
@@ -108,6 +115,12 @@ public final class PushToTalkSession {
         guard case .idle = state, kind == .dictation || commands != nil else { return }
         let secondTap = kind == .dictation && tapReleasedAt.map { now() - $0 <= Self.doubleTapWindow } == true
         tapReleasedAt = nil
+        let language = language()
+        // Recording now would only wait for the model, with nothing on screen saying why.
+        guard speechReady(language) else {
+            onEvent(.modelLoading(language))
+            return
+        }
         // Commands are short and parsed whole; only dictation is transcribed while the key is held.
         recorder.onAudio = kind == .dictation && live != nil ? { [weak self] in self?.audioArrived() } : nil
         do {
@@ -116,7 +129,6 @@ public final class PushToTalkSession {
             onEvent(.failed(.microphone))
             return
         }
-        let language = language()
         if kind == .dictation { live?.begin(language: language) }
         state = .recording(Recording(pressedAt: now(), app: frontmostApp(), kind: kind, language: language,
                                      handsFree: secondTap ? .secondTap : .off))
@@ -139,12 +151,15 @@ public final class PushToTalkSession {
     /// command still being transcribed or understood, and a dictation that hasn't been pasted yet.
     public func cancel() async {
         if case .processing = state {
+            guard canStillCancel else { return }
+            canStillCancel = false
             if processingCommand {
                 commandCancelled = true
             } else {
                 dictationCancelled = true
                 live?.discard()
             }
+            onEvent(.ignored(.cancelled))
             return
         }
         guard case .recording = state else { return }
@@ -207,12 +222,15 @@ public final class PushToTalkSession {
         processingCommand = kind == .command
         commandCancelled = false
         dictationCancelled = false
+        canStillCancel = true
         defer {
             state = .idle
             processingCommand = false
+            canStillCancel = false
         }
 
         let clip = await recorder.stop()
+        guard !cancelled else { return }  // Esc as the key went up
         let releasedAt = now()
         if kind == .dictation { live?.listen(recorder.takeAudio()) }  // audio that arrived as the key went up
         guard releasedAt - pressedAt >= Self.minimumPressDuration else {
@@ -236,24 +254,20 @@ public final class PushToTalkSession {
             text = try await transcriber.transcribe(clip, language: language)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
-            onEvent(dictationCancelled ? .ignored(.cancelled) : .failed(.transcription))
+            if !cancelled { onEvent(.failed(.transcription)) }
             return
         }
-        guard !dictationCancelled else {
-            onEvent(.ignored(.cancelled))
-            return
-        }
+        guard !cancelled else { return }
+        if kind == .dictation { canStillCancel = false }
         guard !text.isEmpty else {
             onEvent(.ignored(.emptyTranscript))
             return
         }
 
         if kind == .command, let commands {
-            let intent = commandCancelled ? nil : await commands.parse(text)
-            guard !commandCancelled else {
-                onEvent(.ignored(.cancelled))
-                return
-            }
+            let intent = await commands.parse(text)
+            guard !commandCancelled else { return }
+            canStillCancel = false
             onEvent(intent.map { .commandParsed($0) } ?? .commandUnknown(transcript: text))
             onTranscript(SessionTranscript(text: text, language: language, app: app, inserted: false, clip: clip,
                                            kind: .command, outcome: intent?.summary ?? CommandIntent.unknownSummary))

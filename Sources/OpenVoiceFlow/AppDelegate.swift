@@ -91,7 +91,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         frontmostApp: { NSWorkspace.shared.frontmostApplication?.localizedName },
         commands: CommandParser(model: { [weak self] in self?.commandModel }, log: { [weak self] in self?.log.notice($0) }),
         commandSpeechToText: pipeline.commands(),
-        live: pipeline.live
+        live: pipeline.live,
+        speechReady: { [weak self] in self?.isSpeechReady(for: $0) ?? true }
     )
     /// When the command key was released, for the "parsed in under 2 s" target.
     private var commandReleasedAt: TimeInterval?
@@ -418,6 +419,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loadCleaner()
     }
 
+    /// Whether a press can record now: this Mac's model for the language isn't still loading. Deepgram doesn't
+    /// wait for it.
+    private func isSpeechReady(for language: Language) -> Bool {
+        modes.mode.speech == .deepgram || !(language == .english ? englishModel : hinglishModel).isLoading
+    }
+
     private func loadModel() {
         guard modelsInstalled else {
             status = .needsSetup
@@ -463,6 +470,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 log.notice(String(format: "Mic: first sample captured %.0f ms after key down (%@)", delay * 1000,
                                   recorder.lastStartWasReady ? "was ready" : "set up on the press"))
             }
+        case .modelLoading(let language):
+            log.notice("Pressed while the \(language.rawValue) model is still loading; nothing recorded")
         case .inserted(let t):
             status = .ready
             onboarding?.model.dictationSucceeded()

@@ -95,9 +95,9 @@ States (one state machine; one spring drives size, corners and content: opening 
 | Command | Cyan: parsed command (`→ Slack · Gurjeet · "…"`), or "Can't do that yet" with "Copied" (the transcript); 3 s, then closes |
 | Acting | The panel grows to list the action's steps: ✓ done, a spinner on the running step, hollow circles for the rest; the header shows who (the resolved full name once found) and the message, with an `esc` key cap. The send row becomes the countdown: a draining ring and "Sending in 3s" |
 | Sent / Stopped | Green ✓ "Sent to Gurjeet Singh", or "Stopped, nothing sent" after Esc; "Probably sent: check Slack" (orange) if Return was pressed but Slack didn't confirm |
-| Error | Red badge with a short shake, message in place of the waveform, "Details"; click expands the details, click "Close" dismisses |
+| Error | Red badge with a short shake, message in place of the waveform, "Details"; click expands the details, click "Close" dismisses. Also "Hinglish model still loading" (or English) when the key is pressed while that model loads: nothing is recorded |
 
-`Esc` while a hotkey is held cancels the recording (a chord, see ticket 01); `Esc` on its own stops a command being understood or an action at any step before the send. The keyboard tap is listen-only, so the focused app also receives the `Esc`. The dictation transcript is *not* previewed before insertion (speed first).
+`Esc` while a hotkey is held cancels the recording (a chord, see ticket 01); `Esc` on its own stops a dictation or command still being transcribed or understood (the notch closes at once), or an action at any step before the send. The keyboard tap is listen-only, so the focused app also receives the `Esc`. The dictation transcript is *not* previewed before insertion (speed first).
 
 ### 4.6 Custom dictionary
 

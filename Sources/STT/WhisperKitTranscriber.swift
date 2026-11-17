@@ -10,6 +10,8 @@ public final class WhisperKitTranscriber: SpeechToText {
     public var onBreakdown: (String) -> Void = { _ in }
     private let engine: WhisperEngine
     private var loading: Task<Void, Error>?
+    /// From the start of the first load until it ends (minutes the first time: the Neural Engine compile).
+    public private(set) var isLoading = false
 
     public init(model: SpeechModel) {
         self.model = model
@@ -21,7 +23,9 @@ public final class WhisperKitTranscriber: SpeechToText {
         if loading == nil {
             let engine = engine
             loading = Task { try await engine.load() }
+            isLoading = true
         }
+        defer { isLoading = false }
         do {
             try await loading?.value
         } catch {
