@@ -15,7 +15,8 @@ struct TranscriptPipelineTests {
     var codeContext = false
 
     /// Holds the key for a second while the speech model "hears" `heard`; returns what was pasted.
-    func press(_ kind: SessionKind = .dictation, hearing heard: String) async -> (pasted: String?, events: [SessionEvent]) {
+    func press(_ kind: SessionKind = .dictation, hearing heard: String, audio: [Float] = [])
+        async -> (pasted: String?, events: [SessionEvent]) {
         model.transcript = heard
         let selected: TextCleaner? = aiEnabled ? ai : nil, codeContext = codeContext
         let pipeline = TranscriptPipeline(speech: model, terms: { ["Gurjeet"] }, isEnglishWord: { _ in false })
@@ -24,11 +25,13 @@ struct TranscriptPipelineTests {
             speechToText: pipeline.dictation(selectedAI: { selected }, isCodeContext: { codeContext }, log: { _ in }),
             inserter: inserter, now: clock.now, language: { .hinglish },
             commands: CommandParser(model: { [commandModel] in commandModel }),
-            commandSpeechToText: pipeline.commands()
+            commandSpeechToText: pipeline.commands(),
+            live: pipeline.live
         )
         var events: [SessionEvent] = []
         session.onEvent = { events.append($0) }
         session.keyDown(kind)
+        recorder.deliver(audio)
         clock.advance(by: 1)
         await session.keyUp()
         return (inserter.inserted.last, events)
@@ -70,5 +73,14 @@ struct TranscriptPipelineTests {
 
         #expect(events.last == .commandParsed(.sendMessage(app: "slack", to: "Gurjeet", text: "I'll be late")))
         #expect(ai.inputs.isEmpty)
+    }
+
+    @Test func cleanupRunsOnceOnTheWholeDictationNotOnEachPart() async {
+        model.replies = ["um, so the plan", "is ready"]
+
+        let pasted = await press(hearing: "", audio: PauseCutterTests.audio([.speech(3), .pause(0.6), .speech(2)])).pasted
+
+        #expect(model.requests.count == 2)
+        #expect(pasted == "So the plan is ready")
     }
 }

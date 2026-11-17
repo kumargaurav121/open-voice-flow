@@ -12,6 +12,26 @@ final class FakeRecorder: AudioRecorder {
         if let startError { throw startError }
         isRecording = true
         startCount += 1
+        waiting = []
+    }
+
+    var onAudio: (() -> Void)?
+    private var waiting: [Float] = []
+
+    /// Audio arriving while recording: queued, then announced, as the microphone does.
+    func deliver(_ samples: [Float]) {
+        waiting += samples
+        onAudio?()
+    }
+
+    /// Audio recorded but not announced yet (it arrives just as the key goes up).
+    func record(_ samples: [Float]) {
+        waiting += samples
+    }
+
+    func takeAudio() -> [Float] {
+        defer { waiting = [] }
+        return waiting
     }
 
     var onStop: (() -> Void)?
@@ -26,7 +46,11 @@ final class FakeRecorder: AudioRecorder {
 @MainActor
 final class FakeSpeechToText: SpeechToText {
     var transcript = ""
+    /// Replies to successive requests, in order; `transcript` once they run out.
+    var replies: [String] = []
     var error: Error?
+    /// Requests (by position, from 0) that fail.
+    var failing: Set<Int> = []
     private(set) var requests: [(clip: AudioClip, language: Language)] = []
     var onTranscribe: (() -> Void)?
 
@@ -34,7 +58,8 @@ final class FakeSpeechToText: SpeechToText {
         requests.append((clip, language))
         onTranscribe?()
         if let error { throw error }
-        return transcript
+        if failing.contains(requests.count - 1) { throw FakeError() }
+        return replies.isEmpty ? transcript : replies.removeFirst()
     }
 }
 

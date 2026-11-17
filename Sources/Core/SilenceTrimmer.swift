@@ -1,5 +1,4 @@
 import Foundation
-import Core
 
 /// Cuts leading and trailing silence from a clip. The silence threshold adapts to the
 /// clip's own noise floor, so quiet rooms and noisy rooms both trim correctly.
@@ -36,7 +35,7 @@ public struct SilenceTrimmer: Sendable {
         return AudioClip(samples: Array(clip.samples[start..<end]), sampleRate: clip.sampleRate)
     }
 
-    static func decibels(_ frame: ArraySlice<Float>) -> Float {
+    public static func decibels(_ frame: ArraySlice<Float>) -> Float {
         let meanSquare = frame.reduce(0) { $0 + $1 * $1 } / Float(frame.count)
         return meanSquare > 0 ? 10 * log10(meanSquare) : silentDecibels
     }

@@ -82,7 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         language: { [weak self] in self?.language ?? .hinglish },
         frontmostApp: { NSWorkspace.shared.frontmostApplication?.localizedName },
         commands: CommandParser(model: { [weak self] in self?.commandModel }, log: { [weak self] in self?.log.notice($0) }),
-        commandSpeechToText: pipeline.commands()
+        commandSpeechToText: pipeline.commands(),
+        live: pipeline.live
     )
     /// When the command key was released, for the "parsed in under 2 s" target.
     private var commandReleasedAt: TimeInterval?
@@ -415,7 +416,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             status = .ready
             onboarding?.model.dictationSucceeded()
             lastMessage = String(format: "Last dictation: text in %.1f s", t.transcribe + t.insert)
-            log.notice(String(format: "Inserted. capture %.2fs transcribe %.2fs insert %.2fs", t.capture, t.transcribe, t.insert))
+            log.notice(String(format: "Inserted. capture %.2fs transcribe %.2fs insert %.2fs parts %d tail %.1fs",
+                              t.capture, t.transcribe, t.insert, t.parts, t.tail))
         case .ignored(let reason):
             status = .ready
             log.notice("Ignored: \(reason)")

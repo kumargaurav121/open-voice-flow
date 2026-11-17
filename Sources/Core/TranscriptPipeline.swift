@@ -1,27 +1,33 @@
 import Foundation
 
-/// Everything between the speech model and the focused app: English letters (always), the user's
-/// dictionary, then cleanup. The app, the eval runner and the tests all build it here, so an eval run
-/// produces exactly the text the app would paste.
+/// Everything between the speech model and the focused app: the speech, transcribed live (in parts while the
+/// user speaks, joined at release), then on the whole text English letters (always), the user's dictionary
+/// and cleanup. The app, the eval runner and the tests all build it here, so an eval run produces exactly
+/// the text the app would paste.
 @MainActor
 public struct TranscriptPipeline {
     /// How long AI cleanup gets before the rules output is used instead (Thorough took up to 2.4 s on long
     /// eval clips).
     public static let cleanupTimeout: Duration = .seconds(4)
 
-    /// Speech to text plus the dictionary and English letters: what dictation and commands share.
+    /// Every transcription, one at a time; dictation feeds it live audio (`PushToTalkSession`'s `live`).
+    public let live: LiveTranscriber
+    /// The live transcription in English letters with the dictionary's spellings.
     private let transcription: SpeechToText
 
     /// - Parameters:
     ///   - speech: the speech model (or the router choosing one).
     ///   - terms: the dictionary, read per transcript so edits apply straight away.
     ///   - isEnglishWord: a spell check; real English words are never respelled.
+    ///   - sentencePause: see `LiveTranscriber.sentencePause`.
     public init(speech: SpeechToText, terms: @escaping () -> [String],
-                isEnglishWord: @escaping @MainActor (String) -> Bool) {
+                isEnglishWord: @escaping @MainActor (String) -> Bool,
+                sentencePause: TimeInterval = LiveTranscriber.sentencePause) {
+        live = LiveTranscriber(wrapping: speech, sentencePause: sentencePause)
         // The dictionary respells names before cleanup, so the AI and its guard see them right too.
         transcription = DictionarySpeechToText(
             // Always English letters and digits, whichever model or script (user requirement).
-            wrapping: LatinScriptSpeechToText(wrapping: speech),
+            wrapping: LatinScriptSpeechToText(wrapping: live),
             terms: terms,
             isEnglishWord: isEnglishWord
         )

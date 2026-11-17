@@ -5,6 +5,7 @@
   ovf-eval score --all --report docs/eval/reports/2026-10-08-bakeoff.md
   ovf-eval intents app-commands                # parsed commands (EvalRunner --commands) vs expected parses
   ovf-eval format baseline-oriserve            # final text of the formatting items vs their expected output
+  ovf-eval breaks v2-02-whole v2-02-parts      # sentence breaks vs the references (punctuation WER ignores)
 """
 
 import argparse
@@ -14,6 +15,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from .breaks import score_breaks
 from .formatting import ExpectedFormat, score_formatting
 from .intents import MAX_TEXT_WER, Expected, Parsed, score_intents
 from .runners import CONFIGS
@@ -183,6 +185,18 @@ def format_command(name: str) -> None:
           f"layout: {sum(r.layout_ok for r in scored)}/{len(scored)}{missing}")
 
 
+def breaks_command(names: list[str]) -> None:
+    runs = {name: _load(name) for name in names}
+    items = items_in_every_run(_items(), list(runs.values()))
+    if not items:
+        raise SystemExit("these runs have no clips in common; score them separately")
+    print(f"{len(items)} clips every run transcribed.\n")
+    print("| Run | Breaks found | False breaks | Missed breaks | Precision | Recall |\n|---|---|---|---|---|---|")
+    for name, transcripts in runs.items():
+        b = score_breaks(items, transcripts)
+        print(f"| {name} | {b.found} | {b.false} | {b.missed} | {b.precision:.0%} | {b.recall:.0%} |")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ovf-eval")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -199,6 +213,8 @@ def main() -> None:
     intents_parser.add_argument("name")
     format_parser = sub.add_parser("format", help="final text of the formatting items vs their expected output")
     format_parser.add_argument("name")
+    breaks_parser = sub.add_parser("breaks", help="sentence breaks vs the references")
+    breaks_parser.add_argument("names", nargs="+")
     args = parser.parse_args()
 
     if args.command == "run":
@@ -207,6 +223,8 @@ def main() -> None:
         intents_command(args.name)
     elif args.command == "format":
         format_command(args.name)
+    elif args.command == "breaks":
+        breaks_command(args.names)
     else:
         saved = sorted(p.stem for p in TRANSCRIPTS.glob("*.json") if not p.name.endswith(".intents.json"))
         names = saved if args.all else args.configs

@@ -19,6 +19,10 @@ cut with `--ids 29-44 --min-silence 2.8 --pad 0.4 --segments docs/eval/segments/
 Baseline: `docs/eval/reports/2026-11-13-eval-set-2-baseline.md`. `ovf-eval score` compares runs on the clips
 every run transcribed, so runs from before the set grew still compare.
 
+**Sentence breaks**: `uv run ovf-eval breaks <run> ...` counts full stops, question and exclamation marks found,
+false (output only) and missed (reference only), lining output words up with the reference. Word error rate
+can't see these (v2 ticket 02: cuts mid-sentence).
+
 **Formatting** (items 38-44): `uv run ovf-eval format <run>` compares each item's final text with its
 `expected_output`: exact (ignoring case and spacing), word errors against the expected text, and layout
 (lines, paragraph breaks, list numbers).

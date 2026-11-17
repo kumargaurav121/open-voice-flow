@@ -29,7 +29,7 @@ struct NotchStateMachineTests {
         notch.handle(.session(.listening(.dictation)))
         notch.handle(.session(.transcribing))
 
-        let effect = notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0))))
+        let effect = notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0, parts: 0, tail: 1))))
 
         #expect(notch.phase == .inserted)
         guard case .returnToIdle(let delay, let token) = effect else {
@@ -45,7 +45,7 @@ struct NotchStateMachineTests {
     func insertedThenPressedAgain() -> (NotchStateMachine, staleToken: Int) {
         var notch = NotchStateMachine()
         notch.handle(.session(.listening(.dictation)))
-        let effect = notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0))))
+        let effect = notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0, parts: 0, tail: 1))))
         guard case .returnToIdle(_, let token) = effect else { fatalError("no timer") }
         notch.handle(.session(.listening(.dictation)))
         return (notch, token)
@@ -152,7 +152,7 @@ struct NotchStateMachineTests {
     @Test func pressingAgainDuringTheCheckGoesStraightToListening() {
         var notch = NotchStateMachine()
         notch.handle(.session(.listening(.dictation)))
-        notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0))))
+        notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0, parts: 0, tail: 1))))
 
         let effect = notch.handle(.session(.listening(.dictation)))
 

@@ -1,7 +1,6 @@
 import Foundation
 import Testing
-import Core
-@testable import Audio
+@testable import Core
 
 struct SilenceTrimmerTests {
     static let rate = 16_000.0

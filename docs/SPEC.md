@@ -37,6 +37,10 @@ Push-to-talk only. Very short presses (< ~250 ms) are ignored. In Settings → G
 ### 4.2 Dictation pipeline
 
 1. **Capture** mic audio (16 kHz mono) while key held; trim leading/trailing silence.
+   **Transcribe while speaking** (ADR 0012): the live audio is cut at the speaker's pauses (0.5 s or more; at
+   the quietest moment after 25 s without one) and each finished part is transcribed in the background, one at a
+   time. At release only the tail is left; the parts' text is joined and cleaned up as one. The language is
+   fixed at key down; commands are transcribed whole after release; `Esc` before the text is pasted discards it.
 2. **Transcribe** with the configured STT provider (default: Hinglish Whisper via WhisperKit, local). Optional cloud: Deepgram Nova-3 with the user's own key (Hinglish mode asks for its multilingual code-switching, English mode for English; the dictionary goes as key terms). If it fails or takes over 8 s, the dictation is transcribed locally instead and the reason logged.
 3. **Clean up**, in two layers:
    - **Rules, always** (~1 ms): hesitations (um, uh), stuttered English function words ("the the"), spacing and sentence capitalisation. Meaning-bearing words ("like", "so", "matlab") and Hindi reduplication ("jaldi jaldi") are left alone.

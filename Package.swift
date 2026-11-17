@@ -16,7 +16,7 @@ let package = Package(
     targets: [
         // Session pipeline, domain types and provider protocols. No platform frameworks.
         .target(name: "Core"),
-        // Mic capture and silence trimming.
+        // Mic capture and audio files.
         .target(name: "Audio", dependencies: ["Core"]),
         // Speech-to-text providers.
         .target(name: "STT", dependencies: ["Core", "ModelStore", .product(name: "WhisperKit", package: "WhisperKit")]),
@@ -48,7 +48,6 @@ let package = Package(
         .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT", "LLM", "Cloud"]),
 
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
-        .testTarget(name: "AudioTests", dependencies: ["Audio"]),
         .testTarget(name: "STTTests", dependencies: ["STT"]),
         .testTarget(name: "EvalRunnerTests", dependencies: ["EvalRunner"]),
         .testTarget(name: "NotchUITests", dependencies: ["NotchUI"]),

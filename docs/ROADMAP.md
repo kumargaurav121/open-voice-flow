@@ -11,7 +11,7 @@ v1 scope is defined in [`SPEC.md`](SPEC.md). Everything below is deliberately **
 
 ## v2 — Feels alive
 
-- **Live streaming transcription**: words appear in the notch while speaking; final accurate pass on release. Also the main latency lever: only the tail is left to transcribe at release (today 1.7-2.1 s for 9-13 s of real speech; part of it is starting cold after you've been talking).
+- **Live preview**: words appear in the notch while speaking. Transcribing while you speak (cut at pauses, only the tail left at release) shipped in v2 ticket 02 (ADR 0012); the notch doesn't show the parts yet.
 - **Compressed Hinglish model**: Argmax-style mixed-bit palettization of Oriserve (~0.6-0.8 GB): faster on the Neural Engine, smaller download, shorter first-load compile. Must re-pass the eval.
 - **Multiple Modes** (SuperWhisper-style): named presets of STT + LLM + prompt + language/script, e.g. "Hinglish Chat", "English Email"; switch per app or by shortcut.
 - **Per-app tone**: casual in chat, formal in email, untouched in code.

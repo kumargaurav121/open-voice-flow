@@ -35,6 +35,11 @@ public protocol AudioRecorder: AnyObject {
     func start() throws
     /// Stops capture and returns the recorded clip with leading/trailing silence trimmed.
     func stop() async -> AudioClip
+    /// Called on the main actor when newly recorded audio is waiting in `takeAudio()`.
+    var onAudio: (() -> Void)? { get set }
+    /// The audio recorded since the last call (or since `start`), untrimmed. Audio that arrived just before
+    /// `stop` can still be taken after it.
+    func takeAudio() -> [Float]
 }
 
 @MainActor

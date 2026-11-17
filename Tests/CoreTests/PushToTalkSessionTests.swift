@@ -93,7 +93,8 @@ struct PushToTalkSessionTests {
         clock.advance(by: 2.0)
         await session.keyUp()
 
-        let timings = SessionTimings(capture: 2.0, transcribe: 0.5, insert: 0.25)
+        // Nothing streamed, so the whole one-second clip was transcribed after release.
+        let timings = SessionTimings(capture: 2.0, transcribe: 0.5, insert: 0.25, parts: 0, tail: 1.0)
         #expect(events == [.listening(.dictation), .transcribing, .inserted(timings)])
     }
 

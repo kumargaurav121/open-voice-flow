@@ -8,8 +8,8 @@ final class HotkeyMonitor {
     enum Kind { case dictate, command }
 
     var onAction: (Kind, PushToTalkKey.Action) -> Void = { _, _ in }
-    /// Esc, at any time: cancels a command still being understood after its key was released (while a
-    /// key is held, any key press cancels through `onAction`).
+    /// Esc, at any time: cancels a recording, a command still being understood after its key was released, or
+    /// a dictation not yet pasted (while a key is held, any key press cancels through `onAction`).
     var onEscape: () -> Void = {}
     private static let escapeKeyCode: Int64 = 53
     /// The current bindings, read on every event so a change in Settings applies straight away.

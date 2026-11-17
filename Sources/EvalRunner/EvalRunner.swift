@@ -8,6 +8,12 @@ import STT
 /// ovf-transcribe: transcribe the eval clips with the app's own speech-to-text pipeline
 /// (silence trim + WhisperKit), so in-app accuracy and latency can be scored with scripts/eval.
 ///
+/// Each clip is dictated through the app's push-to-talk session, cut at pauses as it arrives.
+///   --realtime  plays the audio at speaking pace, so parts are transcribed while it plays and the time is
+///               release → text (otherwise the audio arrives at once and the time covers every part)
+///   --whole     transcribes each trimmed clip in one go instead, as the app did before transcribing while
+///               you speak (v2 ticket 02)
+///
 ///   swift run -c release EvalRunner --name app-oriserve --model-folder <path>   # Hinglish mode
 ///   swift run -c release EvalRunner --name app-turbo                            # English mode / fallback
 ///   DEEPGRAM_API_KEY=… swift run -c release EvalRunner --name deepgram --stt deepgram   # cloud, for comparison
@@ -71,7 +77,9 @@ struct EvalRunner {
             ? DeepgramSpeechToText(apiKey: { envKey(.deepgram) }, keyterms: { dictionary })
             : whisper
         // The app's own pipeline, so the transcripts are exactly what the app would paste (into a non-code app).
-        let pipeline = TranscriptPipeline(speech: speech, terms: { dictionary }, isEnglishWord: { EnglishWords.contains($0) })
+        // --sentence-pause <seconds>: see LiveTranscriber.sentencePause.
+        let pipeline = TranscriptPipeline(speech: speech, terms: { dictionary }, isEnglishWord: { EnglishWords.contains($0) },
+                                          sentencePause: args["--sentence-pause"].flatMap(Double.init) ?? LiveTranscriber.sentencePause)
         let transcriber = pipeline.dictation(selectedAI: { cleaner }, isCodeContext: { false },
                                              log: { print("     cleanup: \($0)") })
         let commandTranscriber = pipeline.commands()
@@ -116,14 +124,24 @@ struct EvalRunner {
         }
 
         var records: [TranscriptRecord] = []
+        let dictation = Dictation(transcriber: transcriber, live: pipeline.live, language: language)
+        let whole = args.has("--whole"), realtime = args.has("--realtime")
+        print(whole ? "  whole clips" : realtime ? "  dictated at speaking pace" : "  dictated, audio at once")
         for row in manifest where ids?.contains(row.id) ?? true {
-            let clip = trimmer.trim(try AudioFileLoader.load(clips.appending(path: row.audio)))
-            var text = ""
-            let elapsed = try await clock.measure { text = try await transcriber.transcribe(clip, language: language) }
-            let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+            let audio = try AudioFileLoader.load(clips.appending(path: row.audio))
+            var text = "", seconds = 0.0, cut = ""
+            if whole {
+                let clip = trimmer.trim(audio)
+                let elapsed = try await clock.measure { text = try await transcriber.transcribe(clip, language: language) }
+                seconds = elapsed / .seconds(1)
+            } else {
+                let (pasted, took, timings) = try await dictation.run(audio, realtime: realtime)
+                (text, seconds) = (pasted, took)
+                cut = timings.map { String(format: " · %d parts, tail %.1fs", $0.parts, $0.tail) } ?? " · nothing pasted"
+            }
             records.append(TranscriptRecord(id: row.id, text: text, seconds: seconds))
-            print(String(format: "  %02d %5.2fs (%4.1fs audio) %@", row.id, seconds, clip.duration, String(text.prefix(50))))
-            print("     \(breakdown)")
+            print(String(format: "  %02d %5.2fs (%4.1fs audio%@) %@", row.id, seconds, audio.duration, cut, String(text.prefix(50))))
+            print("     last transcription: \(breakdown)")
         }
 
         let output = clips.appending(path: "transcripts/\(name).json")

@@ -68,10 +68,17 @@ public struct SessionTimings: Equatable, Sendable {
     public var capture: TimeInterval
     public var transcribe: TimeInterval
     public var insert: TimeInterval
+    /// Parts transcribed while the key was still held.
+    public var parts: Int
+    /// Seconds of audio left to transcribe after release (the whole clip when nothing was cut).
+    public var tail: TimeInterval
 
-    public init(capture: TimeInterval, transcribe: TimeInterval, insert: TimeInterval) {
+    public init(capture: TimeInterval, transcribe: TimeInterval, insert: TimeInterval, parts: Int,
+                tail: TimeInterval) {
         self.capture = capture
         self.transcribe = transcribe
         self.insert = insert
+        self.parts = parts
+        self.tail = tail
     }
 }
