@@ -28,12 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let hotkeys = HotkeyMonitor()
     // English mode runs turbo (best English); Hinglish mode runs the Hinglish model (bake-off, ticket 03).
     private let englishModel = WhisperKitTranscriber(model: .turbo)
-    // Created on first use, after onboarding has installed the models.
+    // Always the Hinglish model, even before onboarding installs it: it loads from its folder when first
+    // used. (Falling back to turbo when it was missing at launch kept Hinglish mode on turbo, which
+    // translates Hindi to English, until the app was relaunched.)
     private lazy var hinglishModel: WhisperKitTranscriber = {
-        let preferred = SpeechModel.preferredHinglish
-        guard preferred != .turbo else { return englishModel }
-        let model = WhisperKitTranscriber(model: preferred)
-        model.onBreakdown = { [weak self] in self?.log.notice("STT \(preferred): \($0)") }
+        let model = WhisperKitTranscriber(model: .hinglish(folder: SpeechModel.hinglishFolder))
+        model.onBreakdown = { [weak self] in self?.log.notice("STT hinglish: \($0)") }
         return model
     }()
     private let downloader = ModelDownloader(transport: URLSessionTransport())
