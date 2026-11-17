@@ -92,4 +92,19 @@ struct ModeTests {
 
         #expect(ModeStore(defaults: defaults).mode == Mode())
     }
+
+    @Test func playsTheReleaseSoundUnlessSwitchedOff() {
+        let store = ModeStore(defaults: defaults)
+        #expect(store.mode.releaseSound)
+
+        store.mode.releaseSound = false
+
+        #expect(ModeStore(defaults: defaults).mode.releaseSound == false)
+    }
+
+    @Test func settingsSavedBeforeTheReleaseSoundExistedPlayIt() {
+        defaults.set(Data(#"{"version": 1, "language": "english", "cleanup": "off"}"#.utf8), forKey: ModeStore.key)
+
+        #expect(ModeStore(defaults: defaults).mode.releaseSound)
+    }
 }

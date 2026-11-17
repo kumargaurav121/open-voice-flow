@@ -51,6 +51,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var history = HistoryModel(store: try? HistoryStore())
     private lazy var historyWindow = HistoryWindow(model: history)
     private let recorder = MicRecorder()
+    /// macOS's own "Pop", quietly: heard, not intrusive.
+    private lazy var popSound: NSSound? = {
+        let sound = NSSound(named: "Pop")
+        sound?.volume = 0.3
+        return sound
+    }()
     private let inserter = Inserter()
     private lazy var notch = NotchController(
         currentDecibels: { [recorder] in recorder.currentDecibels },
@@ -170,6 +176,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         LLMCleaner.configureGPU()
+        recorder.onNote = { [weak self] in self?.log.notice($0) }
+        recorder.prepare()  // so pressing the key only switches the microphone on
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
@@ -401,6 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refreshPermissions() {
         let current = SystemPermissions.current()
         if current != permissions { permissions = current }
+        if current.microphone { recorder.prepare() }  // once granted (during setup too), the first press is quick
         if current.inputMonitoring, !hotkeys.isRunning {
             hotkeys.start()
         }
@@ -410,8 +419,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch event {
         case .listening:
             status = .listening
+        case .released:
+            // After the microphone stopped, so the click isn't recorded.
+            if modes.mode.releaseSound {
+                popSound?.stop()
+                popSound?.play()
+            }
         case .transcribing:
             status = .transcribing
+            if let delay = recorder.firstAudioDelay {
+                log.notice(String(format: "Mic: first sample captured %.0f ms after key down (%@)", delay * 1000,
+                                  recorder.lastStartWasReady ? "was ready" : "set up on the press"))
+            }
         case .inserted(let t):
             status = .ready
             onboarding?.model.dictationSucceeded()

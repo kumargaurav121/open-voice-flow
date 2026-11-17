@@ -27,7 +27,7 @@ struct CommandSessionTests {
     @Test func aCommandIsTranscribedAndParsedButNeverTyped() async {
         let (events, _) = await run("Message Gurjeet saying I'll be late by 15 minutes.")
 
-        #expect(events == [.listening(.command), .transcribing,
+        #expect(events == [.listening(.command), .released(.command), .transcribing,
                            .commandParsed(.sendMessage(app: "slack", to: "Gurjeet", text: "I'll be late by 15 minutes."))])
         #expect(inserter.inserted.isEmpty)
     }

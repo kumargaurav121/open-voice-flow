@@ -121,6 +121,7 @@ public final class PushToTalkSession {
             onEvent(.ignored(.tooShort))
             return
         }
+        onEvent(.released(kind))
         guard !clip.isEmpty else {
             live?.discard()
             onEvent(.ignored(.noSpeech))

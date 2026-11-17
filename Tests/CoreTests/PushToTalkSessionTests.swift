@@ -95,7 +95,7 @@ struct PushToTalkSessionTests {
 
         // Nothing streamed, so the whole one-second clip was transcribed after release.
         let timings = SessionTimings(capture: 2.0, transcribe: 0.5, insert: 0.25, parts: 0, tail: 1.0)
-        #expect(events == [.listening(.dictation), .transcribing, .inserted(timings)])
+        #expect(events == [.listening(.dictation), .released(.dictation), .transcribing, .inserted(timings)])
     }
 
     @Test func insertionFailureIsReported() async {
@@ -174,5 +174,33 @@ struct PushToTalkSessionTests {
         await session.cancel()
 
         #expect(recorder.startCount == 1)
+    }
+
+    @Test func aRealPressWithNoSpeechIsStillAcknowledged() async {
+        recorder.clip = AudioClip(samples: [], sampleRate: 16_000)
+        let session = makeSession()
+        var events: [SessionEvent] = []
+        session.onEvent = { events.append($0) }
+
+        session.keyDown()
+        clock.advance(by: 1.0)
+        await session.keyUp()
+
+        #expect(events == [.listening(.dictation), .released(.dictation), .ignored(.noSpeech)])
+    }
+
+    @Test func anAccidentalTapOrACancelIsNotAnnouncedAsReleased() async {
+        let session = makeSession()
+        var events: [SessionEvent] = []
+        session.onEvent = { events.append($0) }
+
+        session.keyDown()
+        clock.advance(by: 0.1)
+        await session.keyUp()
+        session.keyDown()
+        clock.advance(by: 1.0)
+        await session.cancel()
+
+        #expect(!events.contains(.released(.dictation)))
     }
 }

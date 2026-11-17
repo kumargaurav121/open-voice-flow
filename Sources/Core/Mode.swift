@@ -121,10 +121,13 @@ public struct Mode: Codable, Equatable, Sendable {
         min(max(seconds, sendCountdownRange.lowerBound), sendCountdownRange.upperBound)
     }
 
+    /// A soft sound the moment a dictation or command is released.
+    public var releaseSound = true
+
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case version, language, cleanup, speech, cloudLLM, hotkeys, sendCountdown
+        case version, language, cleanup, speech, cloudLLM, hotkeys, sendCountdown, releaseSound
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,6 +142,7 @@ public struct Mode: Codable, Equatable, Sendable {
         hotkeys = (try? container.decodeIfPresent(LenientHotkeys.self, forKey: .hotkeys))?.value ?? Hotkeys()
         let countdown = (try? container.decodeIfPresent(Int.self, forKey: .sendCountdown)) ?? nil
         sendCountdown = countdown.map(Self.clampedCountdown) ?? Self.defaultSendCountdown
+        releaseSound = ((try? container.decodeIfPresent(Bool.self, forKey: .releaseSound)) ?? nil) ?? true
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -150,6 +154,7 @@ public struct Mode: Codable, Equatable, Sendable {
         try container.encode(cloudLLM, forKey: .cloudLLM)
         try container.encode(hotkeys, forKey: .hotkeys)
         try container.encode(sendCountdown, forKey: .sendCountdown)
+        try container.encode(releaseSound, forKey: .releaseSound)
     }
 }
 

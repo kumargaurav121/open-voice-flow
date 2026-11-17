@@ -130,6 +130,7 @@ private struct GeneralTab: View {
                 Text("Your words always come out in English letters.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Toggle("Play a sound when you let go", isOn: $modes.mode.releaseSound)
             }
         }
         .formStyle(.grouped)

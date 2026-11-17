@@ -86,6 +86,8 @@ public struct NotchStateMachine: Sendable {
         case .session(.commandUnknown):
             phase = .command(.unknown)
             return scheduleReturn(after: Self.commandHold)
+        case .session(.released):
+            break  // the sound acknowledges it; the notch moves on at .transcribing
         case .session(.transcribing):
             phase = .transcribing
         case .session(.inserted):

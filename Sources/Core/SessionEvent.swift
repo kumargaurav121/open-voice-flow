@@ -11,6 +11,9 @@ public enum SessionKind: String, Equatable, Sendable {
 /// What a push-to-talk session reports as it moves through its stages.
 public enum SessionEvent: Equatable, Sendable {
     case listening(SessionKind)
+    /// The key went up after a real press and the microphone is off: the moment to acknowledge it (the
+    /// release sound). Not for an accidental tap or a cancel.
+    case released(SessionKind)
     case transcribing
     case inserted(SessionTimings)
     /// A command understood as a known action (not run yet; ticket 12).
