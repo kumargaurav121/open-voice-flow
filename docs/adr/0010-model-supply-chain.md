@@ -1,6 +1,6 @@
 # 10. Model supply chain: only verifiable, pinned, data-only downloads
 
-Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05)
+Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05), 2026-11-17 (v2 ticket 05)
 
 ## Context
 The app and its tooling download multi-GB models from Hugging Face and convert them with third-party
@@ -54,3 +54,12 @@ our own published models must ship a checksum manifest.
 - **Our published model:** `kumargaurav9013/whisper-hindi2hinglish-apex-coreml` at
   `f1cc87f9820d55650413305d00218343cb1d0da6`, with `ATTRIBUTION.md`, `LICENSE` (Apache-2.0),
   `SOURCE-SHA256SUMS`, a model card disclosing the alignment-heads patch, and `SHA256SUMS` of every file.
+
+## Amendment (v2 ticket 05, 2026-11-17)
+- **Compressing is part of converting ourselves.** Our Hinglish model's audio encoder is palettized to 6 bits
+  with coremltools (Apple's Core ML tools; whisperkittools uses it too), by `scripts/convert-model.sh` from
+  the same pinned weights. coremltools is pinned by its exact released version (9.0): the script installs it
+  every run and refuses another. The build reproduces the published weights byte for byte.
+- **Our published model** is now `kumargaurav9013/whisper-hindi2hinglish-apex-coreml` at
+  `668ef2d23517d6f3da41622aff6b46089e466104`, with the same provenance files and a model card that also
+  discloses the compression and its eval result. The full-size build stays in the repo at `f1cc87f9`.

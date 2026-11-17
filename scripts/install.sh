@@ -33,7 +33,7 @@ macos="$(sw_vers -productVersion)"
 ok "macOS $macos"
 
 free_gb="$(df -g "$HOME" | awk 'NR==2 {print $4}')"
-(( free_gb >= 20 )) || fail "Needs about 20 GB free (${free_gb} GB free): ~6 GB of models plus the build." "Free up space, then run this again."
+(( free_gb >= 20 )) || fail "Needs about 20 GB free (${free_gb} GB free): ~5 GB of models plus the build." "Free up space, then run this again."
 ok "${free_gb} GB free"
 
 step "Checking Xcode"
@@ -85,7 +85,7 @@ cat <<'EOF'
 
 On a first install the setup window opens (reopen it any time: menu bar icon → Setup Guide…):
   1. Allow Microphone, Accessibility and Input Monitoring (each row ticks once allowed).
-  2. Download the models (about 5.5 GB, pinned and checksum-verified).
+  2. Download the models (about 4.8 GB, pinned and checksum-verified).
   3. Wait for the one-time "Preparing" step (up to ~15 minutes the first time).
   4. Try a dictation: hold fn, speak, let go.
 Hands-free: double-tap fn, speak, tap fn again. While the app runs, tapping fn won't open the emoji picker.

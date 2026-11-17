@@ -12,7 +12,7 @@ v1 scope is defined in [`SPEC.md`](SPEC.md). Everything below is deliberately **
 ## v2 — Feels alive
 
 - **Live preview**: words appear in the notch while speaking. Transcribing while you speak (cut at pauses, only the tail left at release) shipped in v2 ticket 02 (ADR 0012); the notch doesn't show the parts yet.
-- **Compressed Hinglish model**: Argmax-style mixed-bit palettization of Oriserve (~0.6-0.8 GB): faster on the Neural Engine, smaller download, shorter first-load compile. Must re-pass the eval.
+- **Compressed Hinglish model**: shipped in v2 ticket 05: the encoder palettized to 6 bits, a 0.8 GB download instead of 1.6 GB, back on the Neural Engine, with accuracy held (`docs/eval/reports/2026-11-17-compressed-hinglish-model.md`).
 - **Multiple Modes** (SuperWhisper-style): named presets of STT + LLM + prompt + language/script, e.g. "Hinglish Chat", "English Email"; switch per app or by shortcut.
 - **Per-app tone**: casual in chat, formal in email, untouched in code.
 - **Auto-learned dictionary**: learn from corrections the user makes right after insertion.

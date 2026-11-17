@@ -67,7 +67,7 @@ struct OnboardingView: View {
             }
         case .download(let status):
             StepLayout(symbol: "arrow.down.circle", title: "Downloading Models",
-                       message: "Speech recognition and AI cleanup models, about 5.5 GB. Every file is checked against its published checksum before it's used.") {
+                       message: "Speech recognition and AI cleanup models, about 4.8 GB. Every file is checked against its published checksum before it's used.") {
                 DownloadStatusView(status: status, secondsLeft: model.downloadSecondsLeft)
             }
         case .preparing(let status):

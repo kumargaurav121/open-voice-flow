@@ -30,9 +30,10 @@ MODELS = [
     ("whisper-turbo-tokenizer", "whisper-turbo-tokenizer", "openai/whisper-large-v3",
      "06f233fe06e710322aca913c1bc4249a0d71fce1", "", ["tokenizer.json", "tokenizer_config.json", "config.json"],
      "Apache-2.0"),
-    # Our Core ML conversion (scripts/convert-model.sh) of Oriserve/Whisper-Hindi2Hinglish-Apex @ f3214eed.
-    ("hinglish", "oriserve-hinglish", "kumargaurav9013/whisper-hindi2hinglish-apex-coreml",
-     "f1cc87f9820d55650413305d00218343cb1d0da6", "", ["*.mlmodelc/*", "*.json", "*.txt"] + PROVENANCE,
+    # Our Core ML conversion (scripts/convert-model.sh) of Oriserve/Whisper-Hindi2Hinglish-Apex @ f3214eed, its
+    # encoder palettized to 6 bits so the Neural Engine takes it, as with turbo above (v2 ticket 05).
+    ("hinglish", "oriserve-hinglish-6bit", "kumargaurav9013/whisper-hindi2hinglish-apex-coreml",
+     "668ef2d23517d6f3da41622aff6b46089e466104", "", ["*.mlmodelc/*", "*.json", "*.txt"] + PROVENANCE,
      "Apache-2.0"),
     ("cleanup-fast", "qwen3-1.7b-4bit", "mlx-community/Qwen3-1.7B-4bit",
      "3b1b1768f8f8cf8351c712464f906e86c2b8269e", "", MLX, "Apache-2.0"),

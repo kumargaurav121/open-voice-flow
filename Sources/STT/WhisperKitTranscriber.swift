@@ -55,7 +55,7 @@ private actor WhisperEngine {
             guard SpeechModel.isHinglishModelInstalled(at: folder) else {
                 throw WhisperKitTranscriberError.modelMissing(folder)
             }
-            // The tokenizer comes from the model folder (written by scripts/convert-model.sh).
+            // The tokenizer comes from the model folder (published with the model; scripts/convert-model.sh builds it).
             // Neural Engine for encoder and decoder: on the GPU the encoder's fixed 30 s window cost ~2 s per
             // clip, over the 1.5 s target. The first ANE load compiles once (minutes) and is then cached.
             config = WhisperKitConfig(
