@@ -1,6 +1,6 @@
 # 10. Model supply chain: only verifiable, pinned, data-only downloads
 
-Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05), 2026-11-17 (v2 ticket 05)
+Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05), 2026-11-17 (v2 ticket 05), 2026-11-18 (v2 ticket 06)
 
 ## Context
 The app and its tooling download multi-GB models from Hugging Face and convert them with third-party
@@ -63,3 +63,18 @@ our own published models must ship a checksum manifest.
 - **Our published model** is now `kumargaurav9013/whisper-hindi2hinglish-apex-coreml` at
   `668ef2d23517d6f3da41622aff6b46089e466104`, with the same provenance files and a model card that also
   discloses the compression and its eval result. The full-size build stays in the repo at `f1cc87f9`.
+
+## Amendment (v2 ticket 06, 2026-11-18)
+- **Evaluating a third-party Core ML build is allowed; shipping one is not, without its own exception.** The
+  Parakeet test ran FluidInference's prebuilt builds (`FluidInference/parakeet-tdt-0.6b-v2-coreml`,
+  `-v3-coreml`; the FluidAudio maintainers' own conversions, CC-BY-4.0, ungated, no code files, 0.13M and
+  3.2M downloads).
+- **Conditions:**
+  - They were fetched by `scripts/eval/fetch-model.py`: a pinned 40-character commit, an allow-list, and
+    data files only. It refuses anything else.
+  - Every file was verified against the commit's own hashes.
+  - They went into a scratch folder and were never installed or shipped.
+- **The library:** FluidAudio, pinned to an exact version, loads them with `AsrModels.loadLocal`, which
+  never downloads. A run with networking denied confirmed it.
+- **Shipping Parakeet (ticket 07)** needs an exception like Argmax's turbo, recorded in that ticket's ADR, or a
+  conversion of our own.

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 import PackageDescription
 
 let package = Package(
@@ -12,6 +12,10 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMinor(from: "3.32.3")),
         // Same swift-transformers WhisperKit pins (1.1.x); used for the LLM's tokenizer.
         .package(url: "https://github.com/huggingface/swift-transformers.git", .upToNextMinor(from: "1.1.6")),
+        // NVIDIA Parakeet on Core ML, for the English-mode test (v2 ticket 06); EvalRunner only. Exact pin, and no
+        // traits: they add text-to-speech, diarization and a prebuilt binary (text normalization) we don't use.
+        // SwiftPM still downloads that binary when resolving (FluidAudio pins its checksum); nothing links it.
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.3", traits: []),
     ],
     targets: [
         // Session pipeline, domain types and provider protocols. No platform frameworks.
@@ -45,7 +49,9 @@ let package = Package(
         // Menu-bar app: hotkeys, permissions, wiring.
         .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding", "History", "Cloud", "Actions"]),
         // Runs the app's speech-to-text over the eval clips, for scoring with scripts/eval.
-        .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT", "LLM", "Cloud"]),
+        .executableTarget(name: "EvalRunner", dependencies: [
+            "Core", "Audio", "STT", "LLM", "Cloud", .product(name: "FluidAudio", package: "FluidAudio"),
+        ]),
 
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "STTTests", dependencies: ["STT"]),

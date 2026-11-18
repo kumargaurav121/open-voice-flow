@@ -17,6 +17,8 @@ import STT
 ///   swift run -c release EvalRunner --name app-oriserve --model-folder <path>   # Hinglish mode
 ///   swift run -c release EvalRunner --name app-turbo                            # English mode / fallback
 ///   DEEPGRAM_API_KEY=… swift run -c release EvalRunner --name deepgram --stt deepgram   # cloud, for comparison
+///   swift run -c release EvalRunner --name parakeet-v2 --language english --stt parakeet-v2 --parakeet-folder <path>
+///     NVIDIA Parakeet TDT v2 or v3 (`--stt parakeet-v3`) through FluidAudio, from a local folder (v2 ticket 06)
 ///   GROQ_API_KEY=… swift run -c release EvalRunner --name oriserve-groq --model-folder <path> --cleanup cloud --llm groq
 /// Cloud keys come from the environment only (never arguments, which end up in shell history).
 ///   swift run -c release EvalRunner --name app-commands --model-folder <path> --commands   # clips 24-28 as commands
@@ -73,9 +75,23 @@ struct EvalRunner {
             : localCleaner
         // --stt deepgram: Deepgram Nova-3 instead of WhisperKit (no fallback here: a failure should show).
         let useDeepgram = args["--stt"] == "deepgram"
-        let speech: SpeechToText = useDeepgram
-            ? DeepgramSpeechToText(apiKey: { envKey(.deepgram) }, keyterms: { dictionary })
-            : whisper
+        // --stt parakeet-v2|parakeet-v3 --parakeet-folder <path>: NVIDIA Parakeet, loaded from that folder only.
+        let parakeet = ParakeetSpeechToText(stt: args["--stt"], folder: URL(filePath: args["--parakeet-folder"] ?? "", directoryHint: .isDirectory))
+        // A misspelt engine would otherwise quietly run Whisper under the run's name.
+        guard args["--stt"].map({ $0 == "deepgram" || parakeet != nil }) ?? true else {
+            throw RunnerError.usage("--stt must be one of: deepgram, parakeet-v2, parakeet-v3 (default: WhisperKit)")
+        }
+        guard (parakeet != nil) == args.has("--parakeet-folder") else {
+            throw RunnerError.usage("--parakeet-folder goes with --stt parakeet-v2 or parakeet-v3, and they need it")
+        }
+        parakeet?.onBreakdown = { breakdown = $0 }
+        let speech: SpeechToText = if useDeepgram {
+            DeepgramSpeechToText(apiKey: { envKey(.deepgram) }, keyterms: { dictionary })
+        } else if let parakeet {
+            parakeet
+        } else {
+            whisper
+        }
         // The app's own pipeline, so the transcripts are exactly what the app would paste (into a non-code app).
         // --sentence-pause <seconds>: see LiveTranscriber.sentencePause.
         let pipeline = TranscriptPipeline(speech: speech, terms: { dictionary }, isEnglishWord: { EnglishWords.contains($0) },
@@ -88,6 +104,10 @@ struct EvalRunner {
 
         if useDeepgram {
             print("\(name): Deepgram Nova-3")
+        } else if let parakeet {
+            print("\(name): loading \(args["--stt"]!)")
+            let loadTime = try await clock.measure { try await parakeet.prepare() }
+            print("  loaded in \(loadTime)")
         } else {
             print("\(name): loading \(model)")
             let loadTime = try await clock.measure { try await whisper.prepare() }
