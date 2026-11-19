@@ -23,16 +23,20 @@ public struct ModelManifest: Codable, Sendable, Equatable {
     /// Folder inside the repo the files live in (Argmax keeps one model per folder); "" for the root.
     public var subfolder: String
     public var license: String
+    /// Who made the model, for its ATTRIBUTION.md, when the repo's publisher only converted it (CC-BY-4.0
+    /// requires the credit); "" otherwise.
+    public var credit: String
     public var files: [File]
 
     public init(id: String, folderName: String, repo: String, revision: String, subfolder: String = "",
-                license: String, files: [File]) {
+                license: String, credit: String = "", files: [File]) {
         self.id = id
         self.folderName = folderName
         self.repo = repo
         self.revision = revision
         self.subfolder = subfolder
         self.license = license
+        self.credit = credit
         self.files = files
     }
 

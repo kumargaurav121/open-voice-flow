@@ -126,8 +126,9 @@ public final class ModelDownloader: Sendable {
         let shipped = Set(manifest.files.map(\.path))
         if !shipped.contains("ATTRIBUTION.md") {
             let source = manifest.subfolder.isEmpty ? manifest.repo : "\(manifest.repo) (\(manifest.subfolder))"
+            let credit = manifest.credit.isEmpty ? "" : "\(manifest.credit)\n\n"
             let attribution = """
-                \(source) at revision \(manifest.revision) (https://huggingface.co/\(manifest.repo)), \
+                \(credit)\(source) at revision \(manifest.revision) (https://huggingface.co/\(manifest.repo)), \
                 licensed \(manifest.license) by its authors.
                 Downloaded unmodified by Open Voice Flow; every file verified against the SHA-256 pinned in the app \
                 (checksums in SOURCE-SHA256SUMS).

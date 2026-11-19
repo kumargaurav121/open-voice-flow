@@ -11,20 +11,31 @@ public struct PauseCutter: Sendable {
         public var pauseBefore: TimeInterval?
     }
 
+    /// How long parts get, both counted from the part's first speech.
+    public struct Lengths: Equatable, Sendable {
+        /// Parts are never shorter than this: a pause before then doesn't cut. Given a word or two, a model
+        /// loses the context around them.
+        public var shortest: TimeInterval
+        /// Without a pause, a part is cut at its quietest moment once it reaches this length.
+        public var longest: TimeInterval
+
+        /// Whisper's: it reads 30 s at a time.
+        public static let short = Lengths(shortest: 2, longest: 25)
+        /// For a model that reads a long stretch in one pass (Parakeet) and is more accurate with all of it: a
+        /// dictation is one part until 40 s of speech, so only long ones are cut (v2 ticket 06). The release
+        /// then waits for at most a minute of speech, about 0.3 s for Parakeet.
+        public static let long = Lengths(shortest: 40, longest: 60)
+    }
+
     /// Silence this long, after speech, ends a part.
     public static let pause: TimeInterval = 0.5
-    /// Without a pause, a part is cut at its quietest moment once it reaches this length (Whisper reads 30 s
-    /// at a time).
-    public static let longestPart: TimeInterval = 25
-    /// Parts are never shorter than this, counted from their first speech: given a word or two, a model loses
-    /// the context around them.
-    public static let shortestPart: TimeInterval = 2
     /// A forced cut looks for the quietest moment in this last stretch of the part.
     static let forcedCutSearch: TimeInterval = 10
     /// The quietest moment is the quietest stretch of this many frames (100 ms).
     static let quietestFrames = 5
 
     private let sampleRate: Double
+    private let lengths: Lengths
     private let frameLength: Int
     /// Audio of the part in progress, from its start.
     private var pending: [Float] = []
@@ -38,8 +49,9 @@ public struct PauseCutter: Sendable {
     /// cut at a pause.
     private var cutAtPause: Bool?
 
-    public init(sampleRate: Double = AudioClip.speechSampleRate) {
+    public init(sampleRate: Double = AudioClip.speechSampleRate, lengths: Lengths = .short) {
         self.sampleRate = sampleRate
+        self.lengths = lengths
         frameLength = max(1, Int(SilenceTrimmer.frameDuration * sampleRate))
     }
 
@@ -67,7 +79,7 @@ public struct PauseCutter: Sendable {
     /// silence (as when the speaker paused before letting go). Quiet trailing words still count: once the
     /// room has been heard, anything 10 dB above its noise does. The cutter then starts afresh.
     public mutating func finish() -> Part {
-        defer { self = PauseCutter(sampleRate: sampleRate) }
+        defer { self = PauseCutter(sampleRate: sampleRate, lengths: lengths) }
         let threshold = threshold
         let heard = levels.contains { $0 > threshold } || levels.isEmpty
         return Part(audio: AudioClip(samples: heard ? pending : [], sampleRate: sampleRate), pauseBefore: pauseBeforePending)
@@ -125,7 +137,7 @@ public struct PauseCutter: Sendable {
         guard heardSpeech else { return nil }
         let threshold = threshold
         guard let firstSpeech = levels.firstIndex(where: { $0 > threshold }),
-              levels.count - firstSpeech >= frames(Self.shortestPart)
+              levels.count - firstSpeech >= frames(lengths.shortest)
         else { return nil }
         let pauseFrames = frames(Self.pause)
         // A pause: the latest frames are silent, after the part's speech.
@@ -133,10 +145,10 @@ public struct PauseCutter: Sendable {
             return (levels.count * frameLength, true)
         }
         // No pause for too long since the part's first speech: cut at the quietest moment of the last stretch,
-        // leaving at least `shortestPart` of speech in the part.
-        guard levels.count - firstSpeech >= frames(Self.longestPart) else { return nil }
+        // leaving at least `lengths.shortest` of speech in the part.
+        guard levels.count - firstSpeech >= frames(lengths.longest) else { return nil }
         let window = Self.quietestFrames
-        let earliest = max(levels.count - frames(Self.forcedCutSearch), firstSpeech + frames(Self.shortestPart))
+        let earliest = max(levels.count - frames(Self.forcedCutSearch), firstSpeech + frames(lengths.shortest))
         guard earliest <= levels.count - window else { return nil }
         let candidates = earliest...(levels.count - window)
         guard let quietest = candidates.min(by: { levels[$0..<$0 + window].reduce(0, +) < levels[$1..<$1 + window].reduce(0, +) })

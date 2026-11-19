@@ -1,6 +1,6 @@
 # 10. Model supply chain: only verifiable, pinned, data-only downloads
 
-Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05), 2026-11-17 (v2 ticket 05), 2026-11-18 (v2 ticket 06)
+Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05), 2026-11-17 (v2 ticket 05), 2026-11-18 (v2 tickets 06, 07)
 
 ## Context
 The app and its tooling download multi-GB models from Hugging Face and convert them with third-party
@@ -78,3 +78,23 @@ our own published models must ship a checksum manifest.
   never downloads. A run with networking denied confirmed it.
 - **Shipping Parakeet (ticket 07)** needs an exception like Argmax's turbo, recorded in that ticket's ADR, or a
   conversion of our own.
+
+## Amendment (v2 ticket 07, 2026-11-18)
+- **Exception: FluidInference's Core ML build of Parakeet ships**, as Argmax's turbo does (ADR 0013).
+  - **Why not convert it ourselves:** NVIDIA publishes Parakeet only as a 2.5 GB `.nemo` archive. It holds a
+    PyTorch checkpoint, the pickle format this ADR avoids loading. A conversion of our own would also need NeMo's
+    export pipeline.
+  - **Why this publisher:** FluidInference maintains FluidAudio, the library that runs the model, as Argmax
+    maintains WhisperKit. The repo is CC-BY-4.0, ungated, has no code files, and its model card names NVIDIA's
+    model as the base.
+- **Conditions:**
+  - It is pinned to `FluidInference/parakeet-tdt-0.6b-v2-coreml` @ `ee09c569f73759e6d44c9bd16766f477b2b36d39`.
+  - Only what FluidAudio loads is listed: the Preprocessor, Encoder, Decoder and JointDecision `.mlmodelc`
+    folders and `parakeet_vocab.json`, 21 files, 0.46 GB. The repo's seven other model folders are not.
+  - Every file is SHA-256-verified against the built-in manifest. The manifest's hashes matched the files
+    ticket 06 verified independently with `fetch-model.py`.
+- **Credit:** a manifest can now carry a `credit` line, which goes at the top of the installed model's
+  `ATTRIBUTION.md`. Parakeet's names NVIDIA's model, its CC-BY-4.0 license and FluidInference as the converter.
+- **The library:** FluidAudio 0.18.3, pinned exactly, with no traits. Models load with `AsrModels.loadLocal`
+  from the model store's folder. FluidAudio's own downloader is never called.
+

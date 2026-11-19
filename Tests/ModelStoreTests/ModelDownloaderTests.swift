@@ -101,6 +101,18 @@ struct ModelDownloaderTests {
         #expect(sums == "\(sha256(config))  config.json\n\(sha256(weights))  weights.bin\n")
     }
 
+    @Test func aModelBuiltOnSomeoneElsesWorkCreditsThemToo() async throws {
+        let store = ModelDownloader(root: root, transport: transport())
+        var credited = manifest()
+        credited.credit = "Based on Example Model by Example Lab (https://example.com/model), converted by Org."
+
+        try await store.install(credited) { _ in }
+
+        let attribution = try String(contentsOf: root.appending(path: "test-model/ATTRIBUTION.md"), encoding: .utf8)
+        #expect(attribution.contains("Based on Example Model by Example Lab (https://example.com/model), converted by Org."))
+        #expect(attribution.contains("org/test at revision \(String(repeating: "a", count: 40))"))  // and where it came from
+    }
+
     @Test func progressCountsOnlyNetworkBytesAsFetched() async throws {
         let fake = transport()
         let store = ModelDownloader(root: root, transport: fake)

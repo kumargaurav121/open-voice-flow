@@ -40,11 +40,12 @@ Very short presses (< ~250 ms) are ignored, except that two quick taps of the di
 1. **Capture** mic audio (16 kHz mono) while key held; trim leading/trailing silence.
    **Transcribe while speaking** (ADR 0012): the live audio is cut at the speaker's pauses (0.5 s or more; at
    the quietest moment after 25 s without one) and each finished part is transcribed in the background, one at a
-   time. At release only the tail is left; the parts' text is joined and cleaned up as one. The language is
+   time. English mode on this Mac (Parakeet, ADR 0013) is cut in long parts: only at a pause after 40 s of speech
+   (at the quietest moment after 60 s without one), so most dictations are transcribed whole at release. At release only the tail is left; the parts' text is joined and cleaned up as one. The language is
    fixed at key down; commands are transcribed whole after release; `Esc` before the text is pasted discards it.
 2. **Transcribe** with the configured STT provider (default: Hinglish Whisper via WhisperKit, local). Optional cloud: Deepgram Nova-3 with the user's own key (Hinglish mode asks for its multilingual code-switching, English mode for English; the dictionary goes as key terms). If it fails or takes over 8 s, the dictation is transcribed locally instead and the reason logged.
 3. **Clean up**, in two layers:
-   - **Rules, always** (~1 ms): hesitations (um, uh), stuttered English function words ("the the"), spacing and sentence capitalisation. Meaning-bearing words ("like", "so", "matlab") and Hindi reduplication ("jaldi jaldi") are left alone.
+   - **Rules, always** (~1 ms): hesitations (um, uh), stuttered English function words ("the the"), spacing and sentence capitalisation, and spoken numbers as digits (10 and up, and times, decimals, percentages and dates: "15 minutes", "11:30", "1.5 seconds", "5%", "1st of December"; one to nine stay words). Meaning-bearing words ("like", "so", "matlab") and Hindi reduplication ("jaldi jaldi") are left alone.
    - **AI, opt-in** from the menu or Settings: *AI Cleanup: Off (default) / Fast (Qwen3-1.7B, ~0.6 s) / Thorough (Qwen3-4B-Instruct, ~1.3 s) / Cloud (OpenAI or Groq with the user's own key, same instructions)*, a local MLX model that also removes fillers and false starts and fixes punctuation. Its rewrite is used only if `AICleanupGuard` confirms it deleted nothing but fillers (at punctuation boundaries) and nearby repeats, added no words and stayed in English letters; otherwise, and on timeout (4 s) or failure, the rules output is used and the reason is logged.
    - **script**: output is always English letters and Western digits (user requirement). The Hinglish model writes Roman script itself; `LatinScriptSpeechToText` transliterates any Devanagari or Arabic-script run that slips through.
    - Code editors and terminals (bundle-ID list) get the raw transcript: no cleanup at all.
@@ -116,15 +117,15 @@ Hand-edited list of words/names (e.g. "Gurjeet", product names), edited in Setti
 Guided window, one step at a time. It opens on first launch and whenever a pinned model is missing (e.g. after an update pins a new one), and can be reopened from the menu ("Setup Guide…"):
 1. Welcome.
 2. Permissions with a live ✓ each and an Allow… button (system prompt, else the right System Settings pane): Microphone, Accessibility (insert text, drive apps), Input Monitoring (`fn` key event tap).
-3. Download of **everything** from **Hugging Face** (~4.8 GB: Whisper turbo, Argmax's compressed build, 0.65 GB; the Hinglish model, its encoder compressed to 6 bits, 0.84 GB; cleanup Fast 1.0 GB and Thorough 2.3 GB): progress with time left, resumable after quitting or a dropped connection (Try Again), every file SHA-256-verified against the manifest built into the app (ADR 0010), stored in `~/Library/Application Support/open-voice-flow/models/`.
-4. Preparing: the first load, where Core ML compiles the speech models for this Mac's Neural Engine (up to ~15 min once, cached afterwards), shown as an estimated progress bar with elapsed time.
+3. Download of **everything** from **Hugging Face** (~5.2 GB: NVIDIA Parakeet TDT 0.6B v2, FluidInference's Core ML build, 0.46 GB; Whisper turbo, Argmax's compressed build, 0.65 GB, downloaded but no longer loaded; the Hinglish model, its encoder compressed to 6 bits, 0.84 GB; cleanup Fast 1.0 GB and Thorough 2.3 GB): progress with time left, resumable after quitting or a dropped connection (Try Again), every file SHA-256-verified against the manifest built into the app (ADR 0010), stored in `~/Library/Application Support/open-voice-flow/models/`.
+4. Preparing: the first load, where Core ML compiles the speech models for this Mac's Neural Engine (up to ~10 min once, cached afterwards), shown as an estimated progress bar with elapsed time.
 5. "Try it": Done unlocks once a dictation has gone through the real pipeline (Skip available).
 
 ## 5. Models & providers
 
 | Role | Default (local) | Alternatives |
 |---|---|---|
-| STT | Two modes from a picker: **Hinglish** (default) = `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, Roman-script output) converted by this project to WhisperKit Core ML from pinned weights; **English** = Whisper large-v3-turbo | **Cloud BYOK (ticket 10): Deepgram Nova-3**. Later: ElevenLabs, OpenAI; Parakeet via FluidAudio (English) |
+| STT | Two modes from a picker: **Hinglish** (default) = `Oriserve/Whisper-Hindi2Hinglish-Apex` (turbo-sized, Roman-script output) converted by this project to WhisperKit Core ML from pinned weights; **English** = NVIDIA Parakeet TDT 0.6B v2 via FluidAudio (Core ML; ADR 0013) | **Cloud BYOK (ticket 10): Deepgram Nova-3**. Later: ElevenLabs, OpenAI |
 | LLM | Cleanup: opt-in Fast = Qwen3-1.7B / Thorough = Qwen3-4B-Instruct (4-bit, MLX-Swift); intents (ticket 11): rules first, then local Qwen3-1.7B | **Cloud BYOK (ticket 10): OpenAI-compatible, OpenAI or Groq**, as AI Cleanup "Cloud". Later: Claude Haiku 4.5; Gemma 4 E2B; Ollama |
 
 Settings are stored as a single `Mode` value: language, AI cleanup choice, STT provider, cloud LLM (service + model) and hotkeys, as versioned, leniently decoded JSON (unknown values fall back to defaults; settings from before Modes were migrated). The cleanup prompt is shared (`CleanupPrompt`), not per Mode yet. App-wide settings stay outside the Mode: dictionary, audio retention, onboarding state. API keys live only in the Keychain (`APIKeys`), never in preferences or logs; logs record a provider's status code, never its message. So multiple Modes later is a UI change only.
@@ -136,7 +137,7 @@ Swift packages, each depending only on those above it:
 ```
 Core        Session pipeline, Mode, provider protocols (SpeechToText, AudioRecorder, TextInserter, TextCleaner, CommandModel; ActionAdapter arrives with ticket 12), PushToTalkSession, command rules and schema, cleanup rules and guard
 Audio       Mic capture, silence trim, current input level
-STT         WhisperKit (local); FluidAudio/Parakeet later
+STT         WhisperKit (Hinglish) and FluidAudio/Parakeet (English), local
 LLM         MLX-Swift (Qwen), local; Ollama later
 Cloud       Opt-in providers with the user's own keys: Deepgram STT, OpenAI-compatible cleanup; Keychain key storage
 Insertion   AX insert, clipboard paste + restore

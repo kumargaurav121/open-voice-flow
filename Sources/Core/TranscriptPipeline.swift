@@ -20,10 +20,12 @@ public struct TranscriptPipeline {
     ///   - terms: the dictionary, read per transcript so edits apply straight away.
     ///   - isEnglishWord: a spell check; real English words are never respelled.
     ///   - sentencePause: see `LiveTranscriber.sentencePause`.
+    ///   - partLengths: how long parts get in each language (see `LiveTranscriber.init`).
     public init(speech: SpeechToText, terms: @escaping () -> [String],
                 isEnglishWord: @escaping @MainActor (String) -> Bool,
-                sentencePause: TimeInterval = LiveTranscriber.sentencePause) {
-        live = LiveTranscriber(wrapping: speech, sentencePause: sentencePause)
+                sentencePause: TimeInterval = LiveTranscriber.sentencePause,
+                partLengths: @escaping (Language) -> PauseCutter.Lengths = { _ in .short }) {
+        live = LiveTranscriber(wrapping: speech, sentencePause: sentencePause, partLengths: partLengths)
         // The dictionary respells names before cleanup, so the AI and its guard see them right too.
         transcription = DictionarySpeechToText(
             // Always English letters and digits, whichever model or script (user requirement).

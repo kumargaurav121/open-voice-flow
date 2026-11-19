@@ -2,7 +2,7 @@
 
 public enum BuiltInModels {
     /// Everything onboarding installs.
-    public static let all = [whisperTurbo, whisperTurboTokenizer, hinglish, cleanupFast, cleanupThorough]
+    public static let all = [whisperTurbo, whisperTurboTokenizer, hinglish, parakeet, cleanupFast, cleanupThorough]
 
     /// argmaxinc/whisperkit-coreml (openai_whisper-large-v3-v20240930_turbo_632MB), MIT
     public static let whisperTurbo = ModelManifest(
@@ -81,6 +81,37 @@ public enum BuiltInModels {
             .init(path: "tokenizer.json", size: 3930645, sha256: "5c1bf30c9e716e1477bedef846b01be0013daecb89e9e3ef7ab89b23c178df1b"),
             .init(path: "tokenizer_config.json", size: 282873, sha256: "3c75940dfce3a294fca7041a5faff011677f1b68fa85e47511bb8cf6dccaded6"),
             .init(path: "vocab.json", size: 835528, sha256: "6788c80b082e9b0d1393147d3a3e62ba19285ac0c82ace8e5ef00f37ead58971"),
+        ]
+    )
+
+    /// FluidInference/parakeet-tdt-0.6b-v2-coreml, CC-BY-4.0
+    public static let parakeet = ModelManifest(
+        id: "parakeet", folderName: "parakeet-tdt-0.6b-v2", repo: "FluidInference/parakeet-tdt-0.6b-v2-coreml",
+        revision: "ee09c569f73759e6d44c9bd16766f477b2b36d39",
+        license: "CC-BY-4.0",
+        credit: "Parakeet TDT 0.6B v2 by NVIDIA (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2), licensed CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/). Converted to Core ML by FluidInference.",
+        files: [
+            .init(path: "Decoder.mlmodelc/analytics/coremldata.bin", size: 243, sha256: "46de1a6fe2e49d19a2125bc91acf020df7f2aea84ba821532aade8427a440b05"),
+            .init(path: "Decoder.mlmodelc/coremldata.bin", size: 554, sha256: "d200ca07694a347f6d02a3886a062ae839831e094e443222f2e48a14945966a8"),
+            .init(path: "Decoder.mlmodelc/metadata.json", size: 3427, sha256: "90a279b822496316458febc0ce761ab05954fadd9d66aa97bea077a35fc8f2b2"),
+            .init(path: "Decoder.mlmodelc/model.mil", size: 13106, sha256: "7b95a5a6b672c652000348a67b6d4d92bb8e176b978c6666fe73c28a4d7ec579"),
+            .init(path: "Decoder.mlmodelc/weights/weight.bin", size: 14429952, sha256: "27d26890221d82322c1092fd99d7b40578e435d5cf4b83c887c42603caf97aba"),
+            .init(path: "Encoder.mlmodelc/analytics/coremldata.bin", size: 243, sha256: "42e638870d73f26b332918a3496ce36793fbb413a81cbd3d16ba01328637a105"),
+            .init(path: "Encoder.mlmodelc/coremldata.bin", size: 485, sha256: "4def7aa848599ad0e17a8b9a982edcdbf33cf92e1f4b798de32e2ca0bc74b030"),
+            .init(path: "Encoder.mlmodelc/metadata.json", size: 2926, sha256: "58222fbc48c13c49d9715567803cd50cb9c23e4360462e0f8ffcea59a2c73c63"),
+            .init(path: "Encoder.mlmodelc/model.mil", size: 959769, sha256: "ed7b19156ca29fa7dfd6891deb9fda4b0e8893f68597c985d135736546a43808"),
+            .init(path: "Encoder.mlmodelc/weights/weight.bin", size: 445187200, sha256: "4adc7ad44f9d05e1bffeb2b06d3bb02861a5c7602dff63a6b494aed3bf8a6c3e"),
+            .init(path: "JointDecision.mlmodelc/analytics/coremldata.bin", size: 243, sha256: "f1183ba213bb94a918c8d2cad19ab045320618f97f6ca662245b3936d7b090f7"),
+            .init(path: "JointDecision.mlmodelc/coremldata.bin", size: 534, sha256: "e2c6752f1c8cf2d3f6f26ec93195c9bfa759ad59edf9f806696a138154f96f11"),
+            .init(path: "JointDecision.mlmodelc/metadata.json", size: 2936, sha256: "ba8d309417b9acd4a175fdb15687de6a941db2f5b06666a60e7cf3cc8e2d3c3c"),
+            .init(path: "JointDecision.mlmodelc/model.mil", size: 9722, sha256: "93bf82042235127cb81ab537dcae47a1c2e7e242ce4ffdaf772981b45eedc4f0"),
+            .init(path: "JointDecision.mlmodelc/weights/weight.bin", size: 3453388, sha256: "ca22a65903a05e64137677da608077578a8606090a598abf4875fa6199aaa19d"),
+            .init(path: "Preprocessor.mlmodelc/analytics/coremldata.bin", size: 243, sha256: "03ab3c1327a054c54c07a40325db967ec574f2c91dcc8192bfa44aa561bcf2d8"),
+            .init(path: "Preprocessor.mlmodelc/coremldata.bin", size: 494, sha256: "d88ea1fc349459c9e100d6a96688c5b29a1f0d865f544be103001724b986b6d6"),
+            .init(path: "Preprocessor.mlmodelc/metadata.json", size: 2974, sha256: "fb16c581ff5e1b962e7cb2181ed892cd32f9f84c12b6e80ff3e089f28e35bcbb"),
+            .init(path: "Preprocessor.mlmodelc/model.mil", size: 27166, sha256: "3e06d16fd061294c8a75be68c43a3b1ed1f593d4a9c35249e9cdbccadc59721e"),
+            .init(path: "Preprocessor.mlmodelc/weights/weight.bin", size: 298880, sha256: "a5f7df6c7f47147ae9486fe18cc7792f9a44d093ec3c6a11e91ef2dc363c48dc"),
+            .init(path: "parakeet_vocab.json", size: 18762, sha256: "57019fe3c745772ca83a1b048a4bb951cd51329504ea33d4d83316b96e279a97"),
         ]
     )
 

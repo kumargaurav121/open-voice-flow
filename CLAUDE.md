@@ -26,8 +26,8 @@ do, and for the rest give short numbered GUI steps, then wait for them to say it
    reopens it). Tell them what to expect before each part:
    - Permissions: Microphone, Accessibility, Input Monitoring. Each *Allow…* button opens the right System
      Settings pane; the row ticks itself within a second of being switched on.
-   - Model download: ~4.8 GB from Hugging Face, resumable, every file checksum-verified.
-   - *Preparing*: macOS compiles the speech model for their Neural Engine once, up to ~15 minutes. The
+   - Model download: ~5.2 GB from Hugging Face, resumable, every file checksum-verified.
+   - *Preparing*: macOS compiles the speech models for their Neural Engine once, up to ~10 minutes. The
      progress bar is an estimate; slow is normal.
    - Try it: click the box, hold `fn`, speak, release.
 3. **The fn key**: while it runs, the app holds System Settings → Keyboard → "Press 🌐 key to" at **Do

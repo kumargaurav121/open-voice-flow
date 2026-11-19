@@ -2,8 +2,9 @@ import Foundation
 
 /// The always-on cleanup pass: fast (no model), conservative, and safe for Hinglish.
 /// Only removes what never carries meaning — hesitation sounds and stuttered English function words —
-/// and tidies spacing and capitalisation. Words that are *sometimes* fillers ("like", "so", "matlab",
-/// "basically") are left for the optional AI pass, and Hindi reduplication ("jaldi jaldi") is kept.
+/// and tidies spacing and capitalisation, and writes spoken numbers as digits (`SpokenNumbers`). Words that are
+/// *sometimes* fillers ("like", "so", "matlab", "basically") are left for the optional AI pass, and Hindi
+/// reduplication ("jaldi jaldi") is kept.
 public enum RulesCleanup {
     static let hesitations: Set<String> = ["um", "umm", "ummm", "uh", "uhh", "uhm", "er", "erm", "hmm", "hmmm", "ah"]
     /// Stutters on these are never intentional; on content words they can be (Hindi reduplication).
@@ -41,7 +42,8 @@ public enum RulesCleanup {
         result = result.replacingOccurrences(of: #",(\s*[,.;:?!])"#, with: "$1", options: .regularExpression)
         // The pronoun "i", not the "i" in "i.e." or "i.e".
         result = result.replacingOccurrences(of: #"(?<![\w.])i(?![\w.])"#, with: "I", options: .regularExpression)
-        return capitaliseSentences(result)
+        // Last: a sentence starting with a number is capitalised as words ("Twenty people" → "20 people").
+        return SpokenNumbers.digits(capitaliseSentences(result))
     }
 
     /// Capitalises the first letter of the text and of each sentence, where a sentence ends with . ? or !

@@ -14,6 +14,8 @@ _CONTRACTIONS = {
     "we're": "we are", "we've": "we have", "we'll": "we will",
     "you're": "you are", "you've": "you have", "you'll": "you will",
     "they're": "they are", "it's": "it is", "that's": "that is", "let's": "let us",
+    "there's": "there is", "here's": "here is", "what's": "what is", "where's": "where is", "who's": "who is",
+    "he's": "he is", "she's": "she is",
     "can't": "can not", "don't": "do not", "won't": "will not", "isn't": "is not",
     "aren't": "are not", "didn't": "did not", "doesn't": "does not",
 }
@@ -28,6 +30,12 @@ _ORDINAL = re.compile(r"\b(\d+)(st|nd|rd|th)\b")
 _NUMBER_UNIT = re.compile(r"\b(\d+)(ms|am|pm)\b")
 _YEAR = re.compile(r"\b(19|20)\d{2}\b")
 _NUMBER = re.compile(r"\b\d+\b")
+# "one and a half" is how "1.5" is said (num2words reads it "one point five"); not "an hour and a half".
+_HALF = re.compile(
+    r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen"
+    r"|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)"
+    r" and a half\b"
+)
 
 
 def _words(n: int, *, ordinal: bool = False) -> str:
@@ -52,7 +60,8 @@ def _spell_numbers(text: str) -> str:
     text = _YEAR.sub(lambda m: str(num2words(int(m[0]), to="year")), text)
     text = _ORDINAL.sub(lambda m: _words(int(m[1]), ordinal=True), text)
     text = _NUMBER_UNIT.sub(lambda m: f"{_words(int(m[1]))} {_UNITS[m[2]]}", text)
-    return _NUMBER.sub(lambda m: _words(int(m[0])), text)
+    text = _NUMBER.sub(lambda m: _words(int(m[0])), text)
+    return _HALF.sub(r"\1 point five", text)
 
 
 def normalize(text: str) -> list[str]:

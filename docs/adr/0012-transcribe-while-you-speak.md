@@ -1,6 +1,6 @@
 # 12. Transcribe while you speak: cut at pauses
 
-Status: Accepted · 2026-11-13
+Status: Accepted · 2026-11-13 · Amended 2026-11-18 (v2 ticket 07)
 
 ## Context
 - **All transcription started at release.** Long dictations waited the longest: by how long `fn` was held, the app log's median release-to-text was 2.65 s for 20-40 s and 4.26 s for 40 s or more, against 1.13 s under 5 s (docs/eval/reports/2026-11-13-eval-set-2-baseline.md).
@@ -38,3 +38,12 @@ Cut at pauses (option 3):
 - **Speed:** a dictation's wait at release depends on its last stretch, not its length. Short dictations without a pause are transcribed whole, as before.
 - **Accuracy:** each part loses the context of the others. The eval bar is accuracy within 0.5 points of transcribing whole.
 - **Groundwork:** this enables hands-free dictation (v2 ticket 04) and AI cleanup per part (ticket 16). It also gives the notch something to show while speaking, if a live preview is added later.
+
+## Amendment (v2 ticket 07, 2026-11-18)
+- **Part lengths now depend on the model.** The 2 s shortest part and the 25 s forced cut are Whisper's
+  (`PauseCutter.Lengths.short`).
+- **English mode on this Mac runs Parakeet** (ADR 0013), which is more accurate with a whole stretch of speech.
+  Its parts are cut only at a pause after 40 s of speech, or at the quietest moment after 60 s without one
+  (`.long`).
+- **`LiveTranscriber` picks the lengths when a dictation starts,** from the language and the speech provider.
+

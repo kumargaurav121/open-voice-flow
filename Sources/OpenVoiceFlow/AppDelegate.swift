@@ -26,8 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let log = AppLog()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let hotkeys = HotkeyMonitor()
-    // English mode runs turbo (best English); Hinglish mode runs the Hinglish model (bake-off, ticket 03).
-    private let englishModel = WhisperKitTranscriber(model: .turbo)
+    // English mode runs Parakeet (about 4 times faster at release than turbo, 0.7 points less accurate because it
+    // keeps the speaker's restarts: v2 tickets 06, 07 and 19, ADR 0013); Hinglish mode runs the Hinglish model
+    // (bake-off, ticket 03). Turbo is still downloaded, but no longer loaded.
+    private let englishModel = ParakeetTranscriber()
     // Always the Hinglish model, even before onboarding installs it: it loads from its folder when first
     // used. (Falling back to turbo when it was missing at launch kept Hinglish mode on turbo, which
     // translates Hindi to English, until the app was relaunched.)
@@ -76,7 +78,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var pipeline = TranscriptPipeline(
         speech: speech,
         terms: { [weak self] in self?.dictionary.terms ?? [] },
-        isEnglishWord: { EnglishWords.contains($0) }
+        isEnglishWord: { EnglishWords.contains($0) },
+        // Parakeet is more accurate with the whole stretch: English is cut only after 40 s of speech. Whisper
+        // (Hinglish) and the cloud are cut at every pause.
+        partLengths: { [weak self] in $0 == .english && self?.modes.mode.speech == .local ? .long : .short }
     )
     private lazy var session = PushToTalkSession(
         recorder: recorder,
@@ -235,7 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        englishModel.onBreakdown = { [weak self] in self?.log.notice("STT turbo: \($0)") }
+        englishModel.onBreakdown = { [weak self] in self?.log.notice("STT parakeet: \($0)") }
         inserter.onMethod = { [weak self] in self?.log.notice($0.description) }
         session.onTranscript = { [weak self] in self?.record($0) }
 
@@ -422,7 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Whether a press can record now: this Mac's model for the language isn't still loading. Deepgram doesn't
     /// wait for it.
     private func isSpeechReady(for language: Language) -> Bool {
-        modes.mode.speech == .deepgram || !(language == .english ? englishModel : hinglishModel).isLoading
+        modes.mode.speech == .deepgram || !(language == .english ? englishModel.isLoading : hinglishModel.isLoading)
     }
 
     private func loadModel() {
@@ -434,8 +439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             do {
                 let started = ProcessInfo.processInfo.systemUptime
-                let model = language == .english ? englishModel : hinglishModel
-                try await model.prepare()
+                if language == .english { try await englishModel.prepare() } else { try await hinglishModel.prepare() }
                 log.notice(String(format: "Speech model for %@ ready in %.1fs", language.rawValue, ProcessInfo.processInfo.systemUptime - started))
                 status = .ready
             } catch {
@@ -552,6 +556,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for option in Language.allCases {
             let entry = item(option.title) { [weak self] in self?.language = option }
             entry.state = option == language ? .on : .off
+            if #available(macOS 14.4, *) { entry.subtitle = option.note } else { entry.toolTip = option.note }
             languages.addItem(entry)
         }
         let languageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")

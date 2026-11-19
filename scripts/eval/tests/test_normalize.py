@@ -32,6 +32,12 @@ def test_contractions_match_their_expansion() -> None:
     assert normalize("I've pushed it, we're done, I'll call") == normalize("I have pushed it we are done I will call")
 
 
+def test_is_contractions_match_their_expansion() -> None:
+    # Parakeet wrote "there is" where the speaker said "there's" (v2 ticket 07).
+    assert normalize("there's time, here's what's left") == normalize("there is time here is what is left")
+    assert normalize("where's he? who's here, he's and she's") == normalize("where is he who is here he is and she is")
+
+
 def test_hyphenated_words_split() -> None:
     assert normalize("working end-to-end") == normalize("working end to end")
 
@@ -46,6 +52,13 @@ def test_thousands_separators() -> None:
 
 def test_decimals_are_not_clock_times() -> None:
     assert normalize("version 2.5") == normalize("version two point five")
+
+
+def test_a_half_matches_point_five() -> None:
+    # Whisper and the number formatting write "1.5 seconds" for "one and a half seconds" (v2 ticket 07).
+    assert normalize("about 1.5 seconds") == normalize("about one and a half seconds")
+    assert normalize("twenty and a half") == normalize("20.5")
+    assert normalize("an hour and a half") == ["an", "hour", "and", "a", "half"]
 
 
 def test_minutes_with_a_leading_zero_read_as_oh() -> None:

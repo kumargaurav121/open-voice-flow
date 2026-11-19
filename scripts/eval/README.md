@@ -31,11 +31,12 @@ can't see these (v2 ticket 02: cuts mid-sentence).
 runs clips 24-28 through the command parser and writes `<name>.intents.json`; `uv run ovf-eval intents
 app-commands` scores them against `expected_parse` (strict: exact words; lenient: within 25% WER).
 
-**Parakeet** (v2 ticket 06): `swift run -c release EvalRunner --name p06-v2-whole --language english --whole
---stt parakeet-v2 --parakeet-folder <path>` (or `parakeet-v3`) runs NVIDIA Parakeet through FluidAudio from a local
-folder. Fetch a model that isn't in the built-in manifests with `fetch-model.py <repo> <commit> <dest> <patterns>`:
+**Parakeet** (English mode's model, ADR 0013): `swift run -c release EvalRunner --name p07-v2 --language english
+--realtime --stt parakeet-v2` runs it from the app's installed folder, in long parts as the app does (cut only at a
+pause after 40 s of speech); `--parakeet-folder <path>` loads another copy, and `parakeet-v3` the multilingual
+model. Fetch a model that isn't in the built-in manifests with `fetch-model.py <repo> <commit> <dest> <patterns>`:
 pinned commit, allow-listed data files only, each verified against the commit's hashes (ADR 0010, amendment for v2
-ticket 06). See `docs/eval/reports/2026-11-18-parakeet-english.md`.
+ticket 06). See `docs/eval/reports/2026-11-18-parakeet-english.md` and `2026-11-18-parakeet-in-english-mode.md`.
 
 **Scores.** WER is corpus-level (total edits / total reference words) after normalising case,
 punctuation, contractions and numbers ("11.30" = "eleven thirty"). *Agnostic* WER also treats a

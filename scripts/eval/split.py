@@ -65,8 +65,12 @@ def padded(segments, total, pad=PAD):
 
 
 def item_range(text):
-    first, _, last = text.partition("-")
-    return set(range(int(first), int(last or first) + 1))
+    """"29-44", or several ranges when an item was skipped: "45-58,60-64"."""
+    ids = set()
+    for part in text.split(","):
+        first, _, last = part.partition("-")
+        ids |= set(range(int(first), int(last or first) + 1))
+    return ids
 
 
 def main():
@@ -75,7 +79,7 @@ def main():
     ap.add_argument("--segments", type=Path)
     ap.add_argument("--noise-db", type=float, default=-35)
     ap.add_argument("--min-silence", type=float, default=1.5)
-    ap.add_argument("--ids", type=item_range, help="the items this recording holds, e.g. 29-44 (default: all)")
+    ap.add_argument("--ids", type=item_range, help="the items this recording holds, e.g. 29-44 or 45-58,60-64 (default: all)")
     ap.add_argument("--pad", type=float, default=PAD, help=f"seconds kept around each item (default {PAD})")
     args = ap.parse_args()
 

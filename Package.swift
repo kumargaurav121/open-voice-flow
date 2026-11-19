@@ -12,9 +12,9 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMinor(from: "3.32.3")),
         // Same swift-transformers WhisperKit pins (1.1.x); used for the LLM's tokenizer.
         .package(url: "https://github.com/huggingface/swift-transformers.git", .upToNextMinor(from: "1.1.6")),
-        // NVIDIA Parakeet on Core ML, for the English-mode test (v2 ticket 06); EvalRunner only. Exact pin, and no
-        // traits: they add text-to-speech, diarization and a prebuilt binary (text normalization) we don't use.
-        // SwiftPM still downloads that binary when resolving (FluidAudio pins its checksum); nothing links it.
+        // NVIDIA Parakeet on Core ML: English mode's speech-to-text (ADR 0013). Exact pin, and no traits: they add
+        // text-to-speech, diarization and a prebuilt binary (text normalization) we don't use. SwiftPM still
+        // downloads that binary when resolving (FluidAudio pins its checksum); nothing links it.
         .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.3", traits: []),
     ],
     targets: [
@@ -23,7 +23,11 @@ let package = Package(
         // Mic capture and audio files.
         .target(name: "Audio", dependencies: ["Core"]),
         // Speech-to-text providers.
-        .target(name: "STT", dependencies: ["Core", "ModelStore", .product(name: "WhisperKit", package: "WhisperKit")]),
+        .target(name: "STT", dependencies: [
+            "Core", "ModelStore",
+            .product(name: "WhisperKit", package: "WhisperKit"),
+            .product(name: "FluidAudio", package: "FluidAudio"),
+        ]),
         // Optional AI cleanup with a local LLM (MLX).
         .target(name: "LLM", dependencies: [
             "Core",
@@ -49,9 +53,7 @@ let package = Package(
         // Menu-bar app: hotkeys, permissions, wiring.
         .executableTarget(name: "OpenVoiceFlow", dependencies: ["Core", "Audio", "STT", "LLM", "Insertion", "NotchUI", "ModelStore", "Onboarding", "History", "Cloud", "Actions"]),
         // Runs the app's speech-to-text over the eval clips, for scoring with scripts/eval.
-        .executableTarget(name: "EvalRunner", dependencies: [
-            "Core", "Audio", "STT", "LLM", "Cloud", .product(name: "FluidAudio", package: "FluidAudio"),
-        ]),
+        .executableTarget(name: "EvalRunner", dependencies: ["Core", "Audio", "STT", "LLM", "Cloud"]),
 
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "STTTests", dependencies: ["STT"]),

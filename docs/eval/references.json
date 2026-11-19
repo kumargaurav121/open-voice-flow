@@ -303,5 +303,125 @@
     "kind": "dictation",
     "reference": "I actually enjoyed the demo, the new notch animation looks really smooth.",
     "expected_output": "I actually enjoyed the demo, the new notch animation looks really smooth."
+  },
+  {
+    "id": 45,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Can you send me the slides before the review at three thirty?"
+  },
+  {
+    "id": 46,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "The build failed again on the main branch, so I'm rolling back the last commit."
+  },
+  {
+    "id": 47,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "I'm running about ten minutes late, start without me."
+  },
+  {
+    "id": 48,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Please add Ananya and Vikram to the design channel."
+  },
+  {
+    "id": 49,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Our sign-up rate went up by twelve percent after we shortened the onboarding."
+  },
+  {
+    "id": 50,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Let's move the retro to Thursday afternoon, since half the team is out on Wednesday."
+  },
+  {
+    "id": 51,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Remind me to renew the domain before the twenty-eighth of February."
+  },
+  {
+    "id": 52,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "The invoice for October comes to two thousand four hundred dollars, including tax."
+  },
+  {
+    "id": 53,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "I think the bug is in the cache layer, not the database. Can you check the logs from last night?"
+  },
+  {
+    "id": 54,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Thanks for the quick turnaround, this looks great. Just one small change: can we make the button text a bit larger on mobile?"
+  },
+  {
+    "id": 55,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Quick question about the API: does the search endpoint support pagination, or do we fetch everything at once?"
+  },
+  {
+    "id": 56,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Hey Arjun, I reviewed your pull request. The logic looks right, but the function is doing too much. Could you split the parsing and the validation into two smaller functions, and add a test for the empty input case?"
+  },
+  {
+    "id": 57,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "For the offsite, we've booked a hotel in Goa for three nights. Flights leave from Bangalore at six fifteen in the morning, so please be at the airport by five."
+  },
+  {
+    "id": 58,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Our monthly cloud bill dropped from about eighteen thousand to eleven thousand rupees after we moved the background jobs to a smaller server."
+  },
+  {
+    "id": 59,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "I'm writing to confirm our meeting next Tuesday at eleven. I'll bring the updated roadmap and the hiring plan for the next quarter."
+  },
+  {
+    "id": 60,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Can you explain the difference between a process and a thread, with a simple example?"
+  },
+  {
+    "id": 61,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Here's my update for today. Yesterday I finished the export feature and fixed two bugs in the settings page. Today I'm working on the sync issue that Meera reported, where notes sometimes show up twice after the phone goes offline. I think it happens when two requests retry at the same time, so I'm adding a check on the server. If that works, I'll ship it to the beta group tomorrow morning. I'm blocked on one thing: I still need access to the analytics dashboard, so if someone can add me, that would be great."
+  },
+  {
+    "id": 62,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Hi Sarah, I wanted to follow up on our conversation about the integration. Our team can start in the second week of January, and we expect the first version to take about six weeks. We'll need read access to your staging environment, and a contact on your side who can answer questions about the data format. I've attached a short document with the scope and the timeline. If anything looks off, let's set up a call this week, so we can sort it out before the holidays. Looking forward to working together."
+  },
+  {
+    "id": 63,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "The reason the app feels slow on older laptops is mostly memory. When the speech model and the language model are both loaded, they take about four gigabytes together, and on a machine with eight gigabytes the system starts swapping. One option is to unload the language model when it hasn't been used for a few minutes. Another is to use a smaller model for cleanup, which would be faster but a little less accurate. I'd like to try the first option, because it doesn't change the output at all, and measure how often people notice the extra delay when the model loads again."
+  },
+  {
+    "id": 64,
+    "lang": "en",
+    "kind": "dictation",
+    "reference": "Hey, are we still on for dinner on Saturday? I was thinking of that new Italian place near the station. I can book a table for four at eight, unless you'd rather go somewhere else."
   }
 ]

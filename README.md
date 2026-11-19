@@ -18,8 +18,8 @@ API keys.
 | Xcode (free) | [App Store](https://apps.apple.com/app/xcode/id497799835). Open it once to finish installing. Tested on Xcode 27. Command Line Tools alone aren't enough. |
 | Xcode's Metal Toolchain | Installed automatically by `scripts/install.sh` (or `xcodebuild -downloadComponent MetalToolchain`). |
 | Your own Apple ID in Xcode (free) | Xcode → Settings → Accounts → + → Apple ID, then *Manage Certificates… → + → Apple Development*. It signs the app on your Mac so macOS remembers its permissions. No paid developer account needed. |
-| About 20 GB free disk | ~5 GB of models plus the build. |
-| Internet for the first run | The models download once from Hugging Face (~4.8 GB, pinned and checksum-verified). |
+| About 20 GB free disk | ~5.2 GB of models plus the build. |
+| Internet for the first run | The models download once from Hugging Face (~5.2 GB, pinned and checksum-verified). |
 
 ## Install with Claude Code (easiest)
 
@@ -45,7 +45,7 @@ the app, installs it to `~/Applications/Open Voice Flow.app` and launches it. Ru
 
 The first launch opens **setup**: it asks for Microphone, Accessibility and Input Monitoring, downloads
 the models (see ADR 0010), and lets you try a dictation. The first load of the speech model compiles it
-for your Mac's Neural Engine (up to ~15 minutes, once). While the app runs with `fn` as a hotkey, it switches
+for your Mac's Neural Engine (up to ~10 minutes, once). While the app runs with `fn` as a hotkey, it switches
 the 🌐 key's own action (System Settings → Keyboard → "Press 🌐 key to", the emoji picker by default) to Do
 Nothing, so tapping `fn` doesn't also open it; your setting comes back when the app quits.
 
@@ -77,7 +77,8 @@ on the clipboard.
 | Role | Model | License |
 |---|---|---|
 | Hinglish speech-to-text | [Oriserve/Whisper-Hindi2Hinglish-Apex](https://huggingface.co/Oriserve/Whisper-Hindi2Hinglish-Apex), converted to Core ML by this project ([published here](https://huggingface.co/kumargaurav9013/whisper-hindi2hinglish-apex-coreml)) | Apache-2.0 |
-| English speech-to-text | Whisper large-v3-turbo ([Argmax WhisperKit](https://huggingface.co/argmaxinc/whisperkit-coreml)) | MIT |
+| English speech-to-text | [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2), Core ML build by [FluidInference](https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml), run with [FluidAudio](https://github.com/FluidInference/FluidAudio) (Apache-2.0) | CC-BY-4.0 |
+| Earlier English model, still downloaded (not loaded) | Whisper large-v3-turbo ([Argmax WhisperKit](https://huggingface.co/argmaxinc/whisperkit-coreml)) | MIT |
 | AI cleanup and commands | Qwen3-1.7B and Qwen3-4B-Instruct, 4-bit MLX ([mlx-community](https://huggingface.co/mlx-community)) | Apache-2.0 |
 
 ## Development

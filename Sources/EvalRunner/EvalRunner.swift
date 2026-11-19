@@ -17,8 +17,9 @@ import STT
 ///   swift run -c release EvalRunner --name app-oriserve --model-folder <path>   # Hinglish mode
 ///   swift run -c release EvalRunner --name app-turbo                            # English mode / fallback
 ///   DEEPGRAM_API_KEY=… swift run -c release EvalRunner --name deepgram --stt deepgram   # cloud, for comparison
-///   swift run -c release EvalRunner --name parakeet-v2 --language english --stt parakeet-v2 --parakeet-folder <path>
-///     NVIDIA Parakeet TDT v2 or v3 (`--stt parakeet-v3`) through FluidAudio, from a local folder (v2 ticket 06)
+///   swift run -c release EvalRunner --name parakeet-v2 --language english --stt parakeet-v2 [--parakeet-folder <path>]
+///     NVIDIA Parakeet TDT v2 (the app's English model, in long parts as in the app), from the app's installed folder
+///     or another, or v3 (`--stt parakeet-v3`, from another folder only) (v2 tickets 06-07)
 ///   GROQ_API_KEY=… swift run -c release EvalRunner --name oriserve-groq --model-folder <path> --cleanup cloud --llm groq
 /// Cloud keys come from the environment only (never arguments, which end up in shell history).
 ///   swift run -c release EvalRunner --name app-commands --model-folder <path> --commands   # clips 24-28 as commands
@@ -75,14 +76,26 @@ struct EvalRunner {
             : localCleaner
         // --stt deepgram: Deepgram Nova-3 instead of WhisperKit (no fallback here: a failure should show).
         let useDeepgram = args["--stt"] == "deepgram"
-        // --stt parakeet-v2|parakeet-v3 --parakeet-folder <path>: NVIDIA Parakeet, loaded from that folder only.
-        let parakeet = ParakeetSpeechToText(stt: args["--stt"], folder: URL(filePath: args["--parakeet-folder"] ?? "", directoryHint: .isDirectory))
+        // --stt parakeet-v2|parakeet-v3 [--parakeet-folder <path>]: NVIDIA Parakeet, the app's English model (v2),
+        // from the app's installed folder or that one (v3 only from a folder: the app installs v2).
+        let parakeetVersion: ParakeetTranscriber.Version? = switch args["--stt"] {
+        case "parakeet-v2": .v2
+        case "parakeet-v3": .v3
+        default: nil
+        }
         // A misspelt engine would otherwise quietly run Whisper under the run's name.
-        guard args["--stt"].map({ $0 == "deepgram" || parakeet != nil }) ?? true else {
+        guard args["--stt"].map({ $0 == "deepgram" || parakeetVersion != nil }) ?? true else {
             throw RunnerError.usage("--stt must be one of: deepgram, parakeet-v2, parakeet-v3 (default: WhisperKit)")
         }
-        guard (parakeet != nil) == args.has("--parakeet-folder") else {
-            throw RunnerError.usage("--parakeet-folder goes with --stt parakeet-v2 or parakeet-v3, and they need it")
+        guard parakeetVersion != nil || !args.has("--parakeet-folder") else {
+            throw RunnerError.usage("--parakeet-folder goes with --stt parakeet-v2 or parakeet-v3")
+        }
+        guard parakeetVersion != .v3 || args.has("--parakeet-folder") else {
+            throw RunnerError.usage("--stt parakeet-v3 needs --parakeet-folder: the app installs v2 only")
+        }
+        let parakeet = parakeetVersion.map { version in
+            args["--parakeet-folder"].map { ParakeetTranscriber(folder: URL(filePath: $0, directoryHint: .isDirectory), version: version) }
+                ?? ParakeetTranscriber(version: version)
         }
         parakeet?.onBreakdown = { breakdown = $0 }
         let speech: SpeechToText = if useDeepgram {
@@ -93,9 +106,10 @@ struct EvalRunner {
             whisper
         }
         // The app's own pipeline, so the transcripts are exactly what the app would paste (into a non-code app).
-        // --sentence-pause <seconds>: see LiveTranscriber.sentencePause.
+        // --sentence-pause <seconds>: see LiveTranscriber.sentencePause. Parakeet transcribes in long parts, as in the app.
         let pipeline = TranscriptPipeline(speech: speech, terms: { dictionary }, isEnglishWord: { EnglishWords.contains($0) },
-                                          sentencePause: args["--sentence-pause"].flatMap(Double.init) ?? LiveTranscriber.sentencePause)
+                                          sentencePause: args["--sentence-pause"].flatMap(Double.init) ?? LiveTranscriber.sentencePause,
+                                          partLengths: { _ in parakeet == nil ? .short : .long })
         let transcriber = pipeline.dictation(selectedAI: { cleaner }, isCodeContext: { false },
                                              log: { print("     cleanup: \($0)") })
         let commandTranscriber = pipeline.commands()

@@ -67,12 +67,12 @@ struct OnboardingView: View {
             }
         case .download(let status):
             StepLayout(symbol: "arrow.down.circle", title: "Downloading Models",
-                       message: "Speech recognition and AI cleanup models, about 4.8 GB. Every file is checked against its published checksum before it's used.") {
+                       message: "Speech recognition and AI cleanup models, about 5.2 GB. Every file is checked against its published checksum before it's used.") {
                 DownloadStatusView(status: status, secondsLeft: model.downloadSecondsLeft)
             }
         case .preparing(let status):
             StepLayout(symbol: "cpu", title: "Preparing for This Mac",
-                       message: "macOS optimises the speech model for this Mac's Neural Engine. This happens once and can take up to 15 minutes; after that it loads in seconds.") {
+                       message: "macOS optimises the speech model for this Mac's Neural Engine. This happens once and can take up to 10 minutes; after that it loads in seconds.") {
                 PreparingStatusView(status: status, started: model.stageStarted)
             }
         case .tryIt(let dictated):
@@ -260,8 +260,9 @@ private struct DownloadStatusView: View {
 private struct PreparingStatusView: View {
     let status: OnboardingFlow.PrepareStatus
     let started: Date
-    /// The Hinglish model's first Neural Engine load took ~15-16 min on an M1 Pro.
-    private static let typical: TimeInterval = 15 * 60
+    /// The first Neural Engine load of Parakeet and the Hinglish model took about 6 min on an M1 Pro (29 s and
+    /// 311-337 s; v2 tickets 05-06).
+    private static let typical: TimeInterval = 6 * 60
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

@@ -77,7 +77,7 @@ public struct Hotkeys: Codable, Equatable, Sendable {
 }
 
 public enum SpeechProvider: String, Codable, CaseIterable, Sendable {
-    /// WhisperKit on this Mac (the Hinglish model or turbo).
+    /// On this Mac: Parakeet for English, the Hinglish model (WhisperKit) for Hinglish.
     case local
     /// Deepgram Nova-3 with the user's own key. Sends audio off the Mac.
     case deepgram

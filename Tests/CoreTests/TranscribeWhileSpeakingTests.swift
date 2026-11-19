@@ -123,6 +123,81 @@ struct TranscribeWhileSpeakingTests {
         #expect(model.requests.allSatisfy { $0.language == .english })
     }
 
+    // MARK: Long parts (a model that reads a long stretch in one pass: Parakeet in English mode)
+
+    /// English in long parts, Hinglish as before.
+    func makeLongPartsSession(language: Language) -> PushToTalkSession {
+        let live = LiveTranscriber(wrapping: model, partLengths: { $0 == .english ? .long : .short })
+        return PushToTalkSession(recorder: recorder, speechToText: live, inserter: inserter, now: clock.now,
+                                 language: { language }, live: live)
+    }
+
+    @Test func inLongPartsADictationUnder40SecondsIsTranscribedWholeAtRelease() async {
+        model.transcript = "All of it."
+        let session = makeLongPartsSession(language: .english)
+
+        session.keyDown()
+        recorder.deliver(Self.audio([.speech(10), .pause(1.2), .speech(12), .pause(0.8), .speech(10), .pause(1)]))
+        await waitForRequests(1)
+        #expect(model.requests.isEmpty)  // nothing cut while speaking
+        recorder.deliver(Self.audio([.speech(3)]))
+        clock.advance(by: 38)
+        await session.keyUp()
+
+        #expect(model.requests.count == 1)
+        #expect(inserter.inserted == ["All of it."])
+    }
+
+    @Test func inLongPartsTheFirstPauseAfter40SecondsOfSpeechCuts() async {
+        model.replies = ["The long part.", "The tail."]
+        let session = makeLongPartsSession(language: .english)
+
+        session.keyDown()
+        recorder.deliver(Self.audio([.speech(20), .pause(0.6), .speech(21), .pause(1.2), .speech(3)]))
+        await waitForRequests(1)
+        let beforeRelease = model.requests.count
+        clock.advance(by: 46)
+        await session.keyUp()
+
+        #expect(beforeRelease == 1)
+        #expect(model.requests.first.map { $0.clip.duration > 41 && $0.clip.duration < 42.5 } == true)
+        #expect(model.requests.last.map { $0.clip.duration > 2.9 && $0.clip.duration < 3.4 } == true)
+        #expect(inserter.inserted == ["The long part. The tail."])
+    }
+
+    @Test func inLongPartsSpeechWithoutAPauseIsCutBefore60Seconds() async {
+        model.replies = ["Without a breath", "the rest."]
+        let session = makeLongPartsSession(language: .english)
+
+        session.keyDown()
+        // The room before the first word: the cutter needs to have heard it to tell speech from silence.
+        recorder.deliver(Self.audio([.pause(1), .speech(55), .quietSpeech(0.3), .speech(10)]))
+        await waitForRequests(1)
+        let beforeRelease = model.requests.count
+        clock.advance(by: 67)
+        await session.keyUp()
+
+        #expect(beforeRelease == 1)
+        // Cut inside the quieter words, 55 s in; the room before the speech is trimmed.
+        #expect(model.requests.first.map { $0.clip.duration > 54.9 && $0.clip.duration < 56.3 } == true)
+        #expect(inserter.inserted == ["Without a breath the rest."])
+    }
+
+    @Test func theOtherLanguageStillCutsAtEveryPause() async {
+        model.replies = ["Pehla.", "Doosra."]
+        let session = makeLongPartsSession(language: .hinglish)
+
+        session.keyDown()
+        recorder.deliver(Self.audio([.speech(3), .pause(1.2), .speech(2)]))
+        await waitForRequests(1)
+        let beforeRelease = model.requests.count
+        clock.advance(by: 6.2)
+        await session.keyUp()
+
+        #expect(beforeRelease == 1)
+        #expect(inserter.inserted == ["Pehla. Doosra."])
+    }
+
     @Test func commandsAreTranscribedWholeAfterRelease() async {
         model.transcript = "Message Gurjeet saying hi"
         let session = PushToTalkSession(recorder: recorder, speechToText: live, inserter: inserter, now: clock.now,

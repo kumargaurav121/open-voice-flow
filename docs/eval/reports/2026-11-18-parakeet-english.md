@@ -61,6 +61,16 @@ The table shows script-agnostic word errors. Strict scores are the same, except 
 higher. The dictionary is the one from the October eval: Gurjeet, Priya, Rohan, Supabase, Vercel, Next.js,
 WhisperKit, MLX Swift, Qwen, Figma.
 
+> **Correction (2026-11-19, ticket 07).** The scorer counted two correct forms as errors: "there's" against
+> "there is", and "1.5" against "one and a half". Whisper wrote both, so it lost 3 words. Both are fixed,
+> with tests (`ovf_eval/normalize.py`). Rescored:
+> - Whisper cut at pauses: **6.5%**, not 7.0%. With the dictionary, 6.6%, not 7.1%.
+> - Parakeet v2 whole: unchanged, 7.3% (7.1% with the dictionary).
+> - v2 cut at pauses with the dictionary 7.9%, v3 whole 7.9%; the rest unchanged.
+>
+> So the go below rested on a **0.8-point gap**, not 0.3: outside the 0.5-point bar. Ticket 07 re-checked
+> it on 19 more English clips: `2026-11-18-parakeet-in-english-mode.md`.
+
 - **Each model works best a different way.**
   - **Whisper is better cut at pauses.** Whole, it skips phrases in long clips: "seconds are left at the
     end" (35), "if we cut in the" (37).
@@ -140,7 +150,7 @@ WhisperKit, MLX Swift, Qwen, Figma.
 
 - **Why:**
   - Parakeet v2 transcribing whole clips is within the bar: 7.3% against 7.0%, and equal with the
-    dictionary.
+    dictionary. (With the scorer fixed, 7.3% against 6.5%: see the correction under Accuracy.)
   - It is clearly faster: 0.08-0.29 s against 0.78-1.27 s at release.
 - **Not v3.**
 - **The margin is small.** Against Whisper cut at pauses the gap is 2 words, against a bar of 3, from single

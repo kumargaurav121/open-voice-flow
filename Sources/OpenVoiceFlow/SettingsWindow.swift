@@ -115,6 +115,11 @@ private struct GeneralTab: View {
                     Text("Hinglish (English and Hindi)").tag(Language.hinglish)
                     Text("English only").tag(Language.english)
                 }
+                if let note = Language.hinglish.note {
+                    Text("Hinglish: \(note)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 // Only choices that can run are offered (a menu picker can't disable one item).
                 Picker("AI Cleanup", selection: $modes.mode.cleanup) {
                     ForEach(CleanupMode.allCases.filter { cleanupAvailable($0) || $0 == modes.mode.cleanup }, id: \.self) { mode in

@@ -32,6 +32,7 @@ public final class LiveTranscriber: SpeechToText {
 
     private let model: SpeechToText
     private let sentencePause: TimeInterval
+    private let partLengths: (Language) -> PauseCutter.Lengths
     private let trimmer = SilenceTrimmer()
     private var cutter = PauseCutter()
     /// The last transcription queued; each new one waits for it.
@@ -44,15 +45,19 @@ public final class LiveTranscriber: SpeechToText {
     /// How the last transcription was cut, for the session's log.
     public private(set) var lastCut = Cut(parts: 0, tail: 0)
 
-    public init(wrapping model: SpeechToText, sentencePause: TimeInterval = LiveTranscriber.sentencePause) {
+    /// - Parameter partLengths: how long a dictation's parts get in each language, read when it starts: the
+    ///   model the language uses decides (see `PauseCutter.Lengths`).
+    public init(wrapping model: SpeechToText, sentencePause: TimeInterval = LiveTranscriber.sentencePause,
+                partLengths: @escaping (Language) -> PauseCutter.Lengths = { _ in .short }) {
         self.model = model
         self.sentencePause = sentencePause
+        self.partLengths = partLengths
     }
 
     /// Starts a dictation (dropping anything left of the last one).
     public func begin(language: Language) {
         discard()
-        cutter = PauseCutter()
+        cutter = PauseCutter(lengths: partLengths(language))
         dictation = (language, [], Batch())
     }
 

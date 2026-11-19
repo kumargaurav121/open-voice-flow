@@ -28,6 +28,14 @@ public enum Language: String, CaseIterable, Sendable {
         case .english: "English"
         }
     }
+
+    /// Shown with the choice in the language pickers (menu and Settings), so the right mode gets picked.
+    public var note: String? {
+        switch self {
+        case .hinglish: "Understands Hindi and mixed speech and writes it in English letters. Less accurate on pure English, and slower."
+        case .english: nil
+        }
+    }
 }
 
 @MainActor
