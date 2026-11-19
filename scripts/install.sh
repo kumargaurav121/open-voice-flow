@@ -85,8 +85,8 @@ cat <<'EOF'
 
 On a first install the setup window opens (reopen it any time: menu bar icon → Setup Guide…):
   1. Allow Microphone, Accessibility and Input Monitoring (each row ticks once allowed).
-  2. Download the models (about 4.8 GB, pinned and checksum-verified).
-  3. Wait for the one-time "Preparing" step (up to ~15 minutes the first time).
+  2. Download the models (about 5.2 GB, pinned and checksum-verified).
+  3. Wait for the one-time "Preparing" step (up to ~10 minutes the first time).
   4. Try a dictation: hold fn, speak, let go.
 Hands-free: double-tap fn, speak, tap fn again. While the app runs, tapping fn won't open the emoji picker.
 EOF
