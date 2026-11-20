@@ -293,4 +293,101 @@ struct TranscriptPipelineTests {
         ai.reply = { _ in "Okay I want three items:\n1. Milk\n2. Tea\n3. Coffee" }  // its own list: rejected
         #expect(await press(hearing: heard).pasted == list)
     }
+
+    // MARK: Self-corrections (v2 ticket 11)
+
+    @Test mutating func theAICleanupMayKeepOnlyWhatWasMeant() async {
+        aiEnabled = true
+        // Eval items 40 and 41: the reading script, and the expected output written for it.
+        ai.reply = { _ in "Let's meet at five, at the usual coffee place." }
+        #expect(await press(hearing: "Let's meet at four, actually no, let's make it five, at the usual coffee place.").pasted
+                == "Let's meet at five, at the usual coffee place.")
+        ai.reply = { _ in "Meeting chaar baje hai. Main kal Pune ja raha hoon." }
+        #expect(await press(hearing: "Meeting teen baje hai, nahi nahi, chaar baje hai. Main kal Mumbai ja raha hoon, sorry, Pune ja raha hoon.").pasted
+                == "Meeting chaar baje hai. Main kal Pune ja raha hoon.")
+    }
+
+    @Test mutating func selfCorrectionsAsTheModelsWroteThem() async {
+        aiEnabled = true
+        // Eval item 40 as Parakeet and Whisper turbo wrote it, 41 as the Hinglish model did ("nahin nahin").
+        ai.reply = { _ in "Let's meet at five at the usual coffee place." }
+        #expect(await press(hearing: "Let's meet at four actually, no, let's make it five at the usual coffee place").pasted
+                == "Let's meet at five at the usual coffee place.")
+        ai.reply = { _ in "Let's meet at 5 at the usual coffee place." }
+        #expect(await press(hearing: "Let's meet at 4. Actually no, let's make it 5 at the usual coffee place.").pasted
+                == "Let's meet at 5 at the usual coffee place.")
+        ai.reply = { _ in "Meeting chaar baje hai, main kal pune ja raha hoon." }
+        #expect(await press(hearing: "Meeting tin baje hai, nahin nahin chaar baje hai, main kal Mumbai ja raha hoon, sorry, pune ja raha hoon.").pasted
+                == "Meeting chaar baje hai, main kal pune ja raha hoon.")
+        // One word for another of its kind: a name for a name.
+        ai.reply = { _ in "Send it to Rahul." }
+        #expect(await press(hearing: "Send it to Priya, sorry, Rahul").pasted == "Send it to Rahul.")
+    }
+
+    @Test mutating func onlyACorrectionMayBeDropped() async {
+        aiEnabled = true
+        let heard = "Let's meet at four, actually no, let's make it five, at the usual coffee place."
+        for rewrite in [
+            "Let's meet at four, at the usual coffee place.",   // the old version kept, the fix dropped
+            "Let's meet at six, at the usual coffee place.",    // a value the speaker didn't say
+            "Let's meet at five, at the usual place.",          // another word dropped, with no marker of its own
+        ] {
+            ai.reply = { _ in rewrite }
+            #expect(await press(hearing: heard).pasted == heard)
+        }
+        // Found in review: the mistake kept and the fix dropped, words lost that no fix replaces, and markers
+        // that aren't corrections.
+        for (heard, rewrite) in [
+            ("Book two tickets, no wait, three tickets", "Book two tickets."),
+            ("Kal do kilo lana, nahi nahi, teen kilo lana", "Kal do kilo lana."),
+            ("Meeting teen baje hai, nahi nahi, chaar baje hai.", "Meeting teen baje hai."),
+            ("I'll come, no wait, I won't come", "I'll come."),
+            ("Let's meet at four, actually no", "Let's meet."),
+            ("Let's meet at four today, actually no, five, at the cafe.", "Let's meet at four, at the cafe."),
+            ("Meeting teen baje hai aaj, nahi nahi, chaar baje hai, office mein.", "Meeting teen baje hai, office mein."),
+            ("Send it to Priya today, sorry, to Rahul, before lunch.", "Send it to Priya, before lunch."),
+            ("Send Priya the deck, no wait, the report", "Send the report."),
+            // Real corrections the guard can't verify, rejected, which is safe: the two alignments of "the"
+            // disagree on what was dropped; the fix is a word longer than the mistake.
+            ("Send Priya the deck, no wait, the report", "Send Priya the report."),
+            ("I'll come, no wait, I won't come", "I won't come."),
+            ("We can't do Friday, sorry, I'll call you tomorrow.", "I'll call you tomorrow."),
+            ("Ship it on Friday, I mean if QA passes.", "If QA passes."),
+            ("We actually no longer support Windows.", "Support Windows."),
+        ] {
+            ai.reply = { _ in rewrite }
+            #expect(await press(hearing: heard).pasted == heard, "\(heard) → \(rewrite)")
+        }
+        // The fixes themselves are accepted.
+        for (heard, fixed) in [
+            ("Book two tickets, no wait, three tickets", "Book three tickets."),
+        ] {
+            ai.reply = { _ in fixed }
+            #expect(await press(hearing: heard).pasted == fixed)
+        }
+        // The marker alone, with nothing it corrects: an apology, not a correction.
+        ai.reply = { _ in "I'm late." }
+        #expect(await press(hearing: "Sorry, I'm late.").pasted == "Sorry, I'm late.")
+        // "Actually" on its own is a real word (eval item 44).
+        ai.reply = { _ in "I enjoyed the demo, the new notch animation looks really smooth." }
+        #expect(await press(hearing: "I actually enjoyed the demo, the new notch animation looks really smooth.").pasted
+                == "I actually enjoyed the demo, the new notch animation looks really smooth.")
+    }
+
+    @Test mutating func aCorrectionDropsAtMostTwelveWords() async {
+        aiEnabled = true
+        // Twelve dropped, the marker included.
+        ai.reply = { _ in "Ask Ravi to bring the big red file from the shelf." }
+        #expect(await press(hearing: "Ask Ram to bring the big red file from the shelf, sorry, ask Ravi to bring the big red file from the shelf.").pasted
+                == "Ask Ravi to bring the big red file from the shelf.")
+        // Thirteen.
+        ai.reply = { _ in "Ask Ravi to bring the big red file from the top shelf." }
+        #expect(await press(hearing: "Ask Ram to bring the big red file from the top shelf, sorry, ask Ravi to bring the big red file from the top shelf.").pasted
+                == "Ask Ram to bring the big red file from the top shelf, sorry, ask Ravi to bring the big red file from the top shelf.")
+    }
+
+    @Test func withoutAICleanupACorrectionStaysAsSpoken() async {
+        #expect(await press(hearing: "Let's meet at four, actually no, let's make it five.").pasted
+                == "Let's meet at four, actually no, let's make it five.")
+    }
 }

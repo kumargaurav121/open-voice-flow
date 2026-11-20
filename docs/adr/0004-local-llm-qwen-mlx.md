@@ -42,3 +42,4 @@ Dictation now has line breaks ("new line", "new paragraph", `SpokenPunctuation`)
   used, so they survive AI cleanup (v2 story 50). Fast and Thorough left eval items 38 and 39's enumerators in place.
 - **To settle in ticket 13:** it wants the AI to lay an email out in paragraphs, which needs the break rule
   loosened (for example, breaks may be added but not removed).
+- **ADR 0015** records the widened guard as a whole: this layout rule and the self-corrections of v2 ticket 11.

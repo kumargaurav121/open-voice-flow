@@ -5,6 +5,9 @@ import Foundation
 /// - every dropped word must be a filler where it was dropped, or a nearby repeat of a word it kept;
 /// - it may not add words or shrink the text below half;
 /// - it must stay in English letters.
+/// A self-correction may go too (v2 ticket 11): a dropped run of up to 12 words, a mistake and a correction marker
+/// ("four, actually no, let's make it"), when the kept fix after it replaces the mistake word for word and the
+/// rewrite adds no word at all (ADR 0015).
 /// Line breaks are the speaker's ("new line", "new paragraph"): the rewrite keeps exactly the same ones. Colons and
 /// list numbers opening a line ("1.", "2)") are layout, not words.
 /// Anything else (an answer, a translation, a dropped "mujhe lagta hai ki", "I like it" → "I it") is
@@ -23,6 +26,16 @@ public enum AICleanupGuard {
     /// Fillers only at a sentence or comma boundary ("So, …", "…, like, …"); elsewhere they carry meaning
     /// ("I like it", "so much", Hindi "na" as a negation).
     static let boundaryFillers: Set<String> = ["so", "like", "actually", "well", "na", "toh", "matlab", "yaani"]
+    /// Said between a mistake and its fix ("four, actually no, five"); "nahin nahin" as the Hinglish model writes it.
+    static let correctionMarkers: [[String]] = [
+        ["actually", "no"], ["no", "wait"], ["scratch", "that"], ["i", "mean"], ["sorry"], ["nahi", "nahi"],
+        ["nahin", "nahin"],
+    ]
+    /// The longest dropped run a correction can explain, its marker included.
+    static let maxCorrectionLength = 12
+    /// Spoken words × rewritten words the correction check aligns at most (about 500 words each, a few
+    /// milliseconds); longer dictations get no corrections.
+    static let maxAlignment = 250_000
 
     public static func accepts(original: String, rewritten: String) -> Bool {
         // List numbers are layout on both sides: never a word, nor standing in for a spoken one.
@@ -31,11 +44,122 @@ public enum AICleanupGuard {
         guard !cleaned.isEmpty, !spoken.isEmpty, breaks(original) == breaks(rewritten),
               !rewritten.unicodeScalars.contains(where: isIndicOrArabic)
         else { return false }
+        if onlyTidied(spoken: spoken, cleaned: cleaned, maxNewWordShare: maxNewWordShare) { return true }
+        // Only what today's rules reject is checked for self-corrections, so nothing accepted before changes.
+        guard let corrected = withoutCorrections(spoken: spoken, cleaned: cleaned) else { return false }
+        return onlyTidied(spoken: corrected, cleaned: cleaned, maxNewWordShare: 0)
+    }
+
+    /// The rewrite only deleted fillers and repeats, added at most `maxNewWordShare` new words, and kept half.
+    private static func onlyTidied(spoken: [Token], cleaned: [String], maxNewWordShare: Double) -> Bool {
         let vocabulary = Set(spoken.map(\.word))
         let newWords = cleaned.filter { !vocabulary.contains($0) }.count
         return Double(newWords) / Double(cleaned.count) <= maxNewWordShare
             && Double(cleaned.count) / Double(spoken.count) >= minLengthRatio
             && onlyFillersAndRepeatsDeleted(spoken: spoken, cleaned: cleaned)
+    }
+
+    // MARK: Self-corrections
+
+    /// The spoken words without the self-corrections the rewrite dropped, or nil when a dropped run isn't one
+    /// (or the text is too long to align). Both ways of aligning repeated words must agree it is a correction:
+    /// matched to their latest spoken copies, and to their earliest.
+    private static func withoutCorrections(spoken: [Token], cleaned: [String]) -> [Token]? {
+        var corrected: [Token]?
+        for latest in [true, false] {
+            guard let kept = keptIndices(spoken: spoken.map(\.word), cleaned: cleaned, latestCopies: latest),
+                  let result = withoutCorrections(spoken: spoken, kept: kept)
+            else { return nil }
+            corrected = result
+        }
+        return corrected
+    }
+
+    private static func withoutCorrections(spoken: [Token], kept: Set<Int>) -> [Token]? {
+        let keptTokens = spoken.indices.filter(kept.contains).map { spoken[$0] }
+        var result: [Token] = []
+        var dropped: [Token] = []
+        var keptSoFar = 0
+        var corrected = false
+        func endDroppedRun() {
+            if isCorrection(dropped, fix: keptTokens[keptSoFar...]) {
+                corrected = true
+            } else {
+                result += dropped
+            }
+            dropped = []
+        }
+        for (index, token) in spoken.enumerated() {
+            if kept.contains(index) {
+                endDroppedRun()
+                result.append(token)
+                keptSoFar += 1
+            } else {
+                dropped.append(token)
+            }
+        }
+        endDroppedRun()
+        return corrected ? result : nil
+    }
+
+    /// A dropped run of a mistake and a marker ("four, actually no"), with a kept fix right after it that
+    /// replaces the mistake word for word: "two tickets" → "three tickets",
+    /// "teen baje hai" → "chaar baje hai". Anything else may be meaning ("We can't do Friday, sorry, I'll call
+    /// you tomorrow" → "I'll call you tomorrow") or the fix dropped instead ("Book two tickets, no wait, three
+    /// tickets" → "Book two tickets").
+    private static func isCorrection(_ run: [Token], fix: ArraySlice<Token>) -> Bool {
+        guard run.count <= maxCorrectionLength else { return false }
+        let words = run.map(\.word)
+        return correctionMarkers.contains { marker in
+            occurrences(of: marker, in: words).contains { start in
+                start > 0 && replaces(Array(run[..<start]), with: Array(fix.prefix(start)))
+            }
+        }
+    }
+
+    /// The fix lines up with the mistake word for word and changes at most half of it, at least one word. A one-word
+    /// mistake must be swapped for its own kind: a number for a number ("four" → "five"), a name for a name.
+    private static func replaces(_ mistake: [Token], with fix: [Token]) -> Bool {
+        guard fix.count == mistake.count else { return false }
+        let changed = zip(mistake, fix).filter { $0.word != $1.word }.count
+        guard changed >= 1, changed <= max(1, mistake.count / 2) else { return false }
+        guard mistake.count == 1 else { return true }
+        let (was, now) = (mistake[0], fix[0])
+        let isNumber = { (token: Token) in token.word.allSatisfy(\.isNumber) }
+        return isNumber(was) && isNumber(now) || was.capitalized && now.capitalized
+    }
+
+    /// Which spoken words the rewrite kept: each kept word matched to its latest spoken copy, or its earliest.
+    /// Nil for texts too long to align.
+    private static func keptIndices(spoken: [String], cleaned: [String], latestCopies: Bool) -> Set<Int>? {
+        guard latestCopies else {
+            // The earliest copies are the latest of the texts reversed.
+            let reversed = keptIndices(spoken: spoken.reversed(), cleaned: cleaned.reversed(), latestCopies: true)
+            return reversed.map { Set($0.map { spoken.count - 1 - $0 }) }
+        }
+        let (n, m) = (spoken.count, cleaned.count)
+        guard n * m <= maxAlignment else { return nil }
+        // Longest common subsequence of the prefixes.
+        var table = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+        for i in 1...n {
+            for j in 1...m {
+                table[i][j] = spoken[i - 1] == cleaned[j - 1] ? table[i - 1][j - 1] + 1 : max(table[i - 1][j], table[i][j - 1])
+            }
+        }
+        // Walking back from the ends matches each word to its latest copy.
+        var kept: Set<Int> = []
+        var (i, j) = (n, m)
+        while i > 0, j > 0 {
+            if spoken[i - 1] == cleaned[j - 1] {
+                kept.insert(i - 1)
+                (i, j) = (i - 1, j - 1)
+            } else if table[i - 1][j] >= table[i][j - 1] {
+                i -= 1
+            } else {
+                j -= 1
+            }
+        }
+        return kept
     }
 
     // MARK: Layout
@@ -106,23 +230,27 @@ public enum AICleanupGuard {
         var boundaryAfter: Bool
         /// "1." or "2)" opening a line: layout, not a word said.
         var isListNumber = false
+        /// Written with a capital: a name, or a sentence's first word.
+        var capitalized = false
     }
 
     private static func tokens(_ text: String) -> [Token] {
-        let lines = text.replacingOccurrences(of: "\u{2019}", with: "'").lowercased().split(separator: "\n")
+        let lines = text.replacingOccurrences(of: "\u{2019}", with: "'").split(separator: "\n")
         var result: [Token] = []
         var afterBoundary = true
         for line in lines {
             let pieces = line.split(whereSeparator: \.isWhitespace)
             for (position, piece) in pieces.enumerated() {
-                let words = piece.split { !$0.isLetter && !$0.isNumber && $0 != "'" }.map { canonical(String($0)) }
+                let written = piece.split { !$0.isLetter && !$0.isNumber && $0 != "'" }
+                let words = written.map { canonical($0.lowercased()) }
                 let endsWithBoundary = piece.last.map { ",.;:?!".contains($0) } ?? false
                 let isListNumber = position == 0 && piece.range(of: #"^\d+[.)]$"#, options: .regularExpression) != nil
                 for (index, word) in words.enumerated() {
                     result.append(Token(word: word,
                                         boundaryBefore: index == 0 && afterBoundary,
                                         boundaryAfter: index == words.count - 1 && endsWithBoundary,
-                                        isListNumber: isListNumber))
+                                        isListNumber: isListNumber,
+                                        capitalized: written[index].first?.isUppercase ?? false))
                 }
                 if !words.isEmpty { afterBoundary = endsWithBoundary }
             }
