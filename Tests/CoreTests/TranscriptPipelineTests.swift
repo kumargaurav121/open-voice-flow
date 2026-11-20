@@ -246,6 +246,19 @@ struct TranscriptPipelineTests {
         }
     }
 
+    @Test func aListOfThreeMayStartMidPhrase() async {
+        // As dictated on the Mac (2026-11-20); the user asked for lists of three or more to count.
+        #expect(await press(hearing: "I need to buy first milk, second bread, third eggs.").pasted
+                == "I need to buy:\n1. Milk\n2. Bread\n3. Eggs")
+        for sentence in [
+            "I need to buy first milk, second bread.",                    // two: the start must be clear
+            "She won first prize, second prize and third prize.",           // ranks of one thing
+            "She came first in maths, second in science and third in art.",  // ranks in places
+        ] {
+            #expect(await press(hearing: sentence).pasted == sentence)
+        }
+    }
+
     @Test func itemsOfUpToThreeWordsHaveNoFullStopsElseAllDo() async {
         #expect(await press(hearing: "First, buy milk. Second, call the plumber.").pasted == "1. Buy milk\n2. Call the plumber")
         #expect(await press(hearing: "First, buy fresh milk. Second, call the plumber today.").pasted

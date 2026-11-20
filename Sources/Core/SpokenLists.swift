@@ -9,6 +9,8 @@ import Foundation
 /// - Clear lists only: every enumerator has its own punctuation or comes before an article ("One, …", "two the
 ///   …"), or there are three or more of them ("first doodh, second bread, third ande"). No item may be empty or
 ///   start with a joining word ("first and foremost", "first of all").
+/// - A list of three or more may start with an ordinal mid-phrase ("I need to buy first milk, second bread, third
+///   eggs"; the user's choice, 2026-11-20), unless they are ranks: "first prize, second prize", "first in maths".
 /// - "And" before an enumerator is dropped, and so is "is" after a bare ordinal ("first is milk" → "1. Milk").
 /// - Items start with a capital. If every item is up to three words they are fragments with no full stop
 ///   ("Doodh"); otherwise all are sentences and end with one.
@@ -49,6 +51,8 @@ enum SpokenLists {
         let end: Int
         /// Followed by its own punctuation or an article: clearly an enumerator even in a list of two.
         let marked: Bool
+        /// Not at a phrase start ("buy first milk"): only a first ordinal, in a list of three or more.
+        var midPhrase = false
     }
 
     private static let ordinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"]
@@ -65,6 +69,8 @@ enum SpokenLists {
     private static let connectors: Set<String> = ["and", "aur", "then"]
     /// An item can't start with one: the ordinal was part of a phrase ("first and foremost", "first of all").
     private static let joiningWords: Set<String> = ["and", "or", "of", "but", "aur", "ya"]
+    /// An item starting with one makes mid-phrase ordinals ranks ("first in maths, second in science").
+    private static let prepositions: Set<String> = ["in", "at", "on", "for", "to", "by", "with", "from", "among"]
     /// After an enumerator, these start its item clearly.
     private static let articles: Set<String> = [
         "the", "a", "an", "this", "that", "these", "those", "my", "our", "your", "his", "her", "their", "its",
@@ -90,7 +96,8 @@ enum SpokenLists {
     }
 
     private static func list(of run: [Enumerator], in words: [Word]) -> List? {
-        guard run.count >= 2, run.allSatisfy(\.marked) || run.count >= 3 else { return nil }
+        let startsMidPhrase = run[0].midPhrase
+        guard run.count >= (startsMidPhrase ? 3 : 2), run.allSatisfy(\.marked) || run.count >= 3 else { return nil }
         var items: [[Word]] = []
         var after: [Word] = []
         for (position, enumerator) in run.enumerated() {
@@ -108,11 +115,29 @@ enum SpokenLists {
             guard let first = item.first, !joiningWords.contains(first.name) else { return nil }
             items.append(item)
         }
+        if startsMidPhrase {
+            // Ranks, not a list: "first prize, second prize…", "first in maths, second in science…".
+            guard Set(items.map { $0.map(\.name).joined(separator: " ") }).count > 1,
+                  !items.contains(where: { prepositions.contains($0[0].name) })
+            else { return nil }
+        }
         return List(leadIn: Array(words[..<run[0].start]), items: items, after: after)
     }
 
     private static func enumerator(at index: Int, in words: [Word]) -> Enumerator? {
-        guard startsAPhrase(index, in: words) else { return nil }
+        guard startsAPhrase(index, in: words) else {
+            // "Buy first milk, …": only a first ordinal, and the list must then be three or more.
+            guard ["first", "pahla", "pehla", "pahli", "pehli"].contains(words[index].name),
+                  var first = reading(at: index, in: words)
+            else { return nil }
+            first.midPhrase = true
+            return first
+        }
+        return reading(at: index, in: words)
+    }
+
+    /// The enumerator the words at `index` are, if they start a phrase.
+    private static func reading(at index: Int, in words: [Word]) -> Enumerator? {
         let word = words[index]
         let next = index + 1 < words.count ? words[index + 1] : nil
         func found(_ kind: Kind, _ value: Int, length: Int = 1, marked: Bool? = nil) -> Enumerator {
