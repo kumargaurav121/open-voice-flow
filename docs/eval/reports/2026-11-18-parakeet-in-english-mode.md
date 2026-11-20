@@ -139,20 +139,27 @@ Strict scores are the same within 0.1 points.
     created.
   - Launched with English selected: "Speech model for english ready in 0.6s".
 - **English dictations in the app (2026-11-20), three in all:**
-  - **Speed:** release to text was 0.36, 0.43 and 0.53 s. Whisper turbo took 0.88-1.08 s on 7 English
-    dictations of 2-5 s on 2026-11-17. That is about 2 times faster, on few dictations.
+  - **Speed:** release to text was 0.53 s with 5 s left at release, and 0.36 s and 0.43 s with 10-12 s left.
+    Whisper turbo, in English mode on 2026-11-17, took 0.88-1.05 s with 2-2.5 s left and 1.34 s with 11 s left.
+    Three earlier that morning took 2.5-4.7 s and are left out.
+    - That is 2-3 times faster, on few dictations.
+    - All three are over the 0.3 s bar, and slower than in the eval: about 0.2 s at similar lengths there.
   - **The first two came out wrong:**
     - "review of 33" for "review at three thirty"
     - "from 12:12 value percent to invoice counts" for "by twelve percent, and the invoice comes"
   - **The rules weren't the cause.** Given the words that were said, they write "at 3:30" and "12%". Parakeet
     heard other words.
   - **The audio wasn't kept,** so it couldn't be replayed. The mic input had changed nine times that morning.
-  - **The numbers sentence was said again 50 minutes later,** on the MacBook Pro microphone. It came out right:
-    "Our sign up rate went up by 12% and the invoice comes to 2400 dollars."
+  - **The numbers sentence was said again 50 minutes later.** It came out right: "Our sign up rate went up by
+    12% and the invoice comes to 2400 dollars." The default input was the MacBook Pro microphone afterwards; the
+    mic for each dictation isn't known.
+  - **1 of 3 came out right.** The "three thirty" sentence wasn't tried again.
   - **Not tested yet:** Parakeet against Whisper on the same audio recorded by the app. If English dictations
     keep coming out wrong:
     1. Turn on Settings → Privacy → Keep audio recordings.
     2. Run both models on the kept recordings with `EvalRunner --clips`.
+
+    Ticket 20 tracks this.
 
 ## Decision (user, 2026-11-19): go, below the bar
 
@@ -162,7 +169,8 @@ Strict scores are the same within 0.1 points.
   - On long dictations it is more accurate and 5-8 times faster.
 - **Not met:**
   - Within 0.5 points: 0.7.
-  - 0.3 s or less at any length: 3 of 36 clips over, slowest 0.53 s.
+  - 0.3 s or less at any length: 3 of 36 clips over, slowest 0.53 s. On the Mac, all 3 dictations were over
+    (0.36-0.53 s).
 
 Runs:
 - 17 eval-set clips: `p07-turbo-rt`, `p07-final` (and `p07-v2-long`, before the number rules), and with
