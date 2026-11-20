@@ -130,10 +130,29 @@ Strict scores are the same within 0.1 points.
   downloaders are never called.
 - **The built app** has no text-to-speech or diarization code, and none of the text-normalization binary's
   symbols.
-- **Still to check on the Mac after install:**
-  - the eval runner on the installed folder with networking denied
-  - FluidAudio's own folders (`~/Library/Application Support/FluidAudio`, `~/.cache/fluidaudio`) never created
-  - English dictations faster in the app log
+- **Checked on the Mac after install (2026-11-20):**
+  - The app downloaded the model and prepared both speech models in 39.6 s. All 21 installed files match their
+    SHA-256s, at the pinned commit.
+  - The eval runner ran the installed folder with networking denied (`sandbox-exec`, `deny network*`): clips 1,
+    2 and 35 came out word for word as in `p07-final`.
+  - FluidAudio's own folders (`~/Library/Application Support/FluidAudio`, `~/.cache/fluidaudio`) were never
+    created.
+  - Launched with English selected: "Speech model for english ready in 0.6s".
+- **English dictations in the app (2026-11-20), three in all:**
+  - **Speed:** release to text was 0.36, 0.43 and 0.53 s. Whisper turbo took 0.88-1.08 s on 7 English
+    dictations of 2-5 s on 2026-11-17. That is about 2 times faster, on few dictations.
+  - **The first two came out wrong:**
+    - "review of 33" for "review at three thirty"
+    - "from 12:12 value percent to invoice counts" for "by twelve percent, and the invoice comes"
+  - **The rules weren't the cause.** Given the words that were said, they write "at 3:30" and "12%". Parakeet
+    heard other words.
+  - **The audio wasn't kept,** so it couldn't be replayed. The mic input had changed nine times that morning.
+  - **The numbers sentence was said again 50 minutes later,** on the MacBook Pro microphone. It came out right:
+    "Our sign up rate went up by 12% and the invoice comes to 2400 dollars."
+  - **Not tested yet:** Parakeet against Whisper on the same audio recorded by the app. If English dictations
+    keep coming out wrong:
+    1. Turn on Settings → Privacy → Keep audio recordings.
+    2. Run both models on the kept recordings with `EvalRunner --clips`.
 
 ## Decision (user, 2026-11-19): go, below the bar
 
