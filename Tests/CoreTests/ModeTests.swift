@@ -6,10 +6,12 @@ import Testing
 struct ModeTests {
     let defaults = UserDefaults(suiteName: "ovf-mode-\(UUID().uuidString)")!
 
-    @Test func startsLocalWithTheUsualDefaults() {
+    @Test func aNewInstallStartsInEnglishWithTheUsualDefaults() {
         let mode = ModeStore(defaults: defaults).mode
 
-        #expect(mode.language == .hinglish)
+        #expect(mode.language == .english)
+        // Saved at once, so a later change of default doesn't switch this install.
+        #expect(defaults.data(forKey: ModeStore.key) != nil)
         #expect(mode.cleanup == .off)
         #expect(mode.speech == .local)
         #expect(mode.cloudLLM == CloudLLM(service: .groq, model: nil))
@@ -60,6 +62,38 @@ struct ModeTests {
         defaults.set(Data(#"{"hotkeys": {"dictate": "rightOption", "command": "a-key-from-the-future"}}"#.utf8), forKey: ModeStore.key)
 
         #expect(ModeStore(defaults: defaults).mode.hotkeys == Hotkeys())
+    }
+
+    @Test func aStoredHinglishChoiceStaysHinglish() {
+        defaults.set(Data(#"{"version": 1, "language": "hinglish", "cleanup": "off", "speech": "local"}"#.utf8), forKey: ModeStore.key)
+
+        #expect(ModeStore(defaults: defaults).mode.language == .hinglish)
+    }
+
+    @Test func hinglishPickedBeforeModesExistedStaysHinglish() {
+        defaults.set("hinglish", forKey: "language")
+
+        #expect(ModeStore(defaults: defaults).mode.language == .hinglish)
+    }
+
+    @Test func settingsFromBeforeModesWithNoLanguageKeepHinglish() {
+        // Hinglish was the default then; only a new install starts in English.
+        defaults.set("fast", forKey: "cleanupMode")
+
+        #expect(ModeStore(defaults: defaults).mode.language == .hinglish)
+    }
+
+    @Test func anInstallThatFinishedSetupBeforeModesExistedKeepsHinglish() {
+        defaults.set(true, forKey: "onboardingComplete")
+
+        #expect(ModeStore(defaults: defaults).mode.language == .hinglish)
+        #expect(defaults.bool(forKey: "onboardingComplete"))  // still the app's setup state
+    }
+
+    @Test func anUnknownSavedLanguageFallsBackToEnglish() {
+        defaults.set(Data(#"{"version": 1, "language": "a-language-from-the-future"}"#.utf8), forKey: ModeStore.key)
+
+        #expect(ModeStore(defaults: defaults).mode.language == .english)
     }
 
     @Test func migratedSettingsAreSavedAsTheModeAndTheOldOnesRemoved() {

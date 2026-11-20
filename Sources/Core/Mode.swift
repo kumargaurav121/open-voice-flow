@@ -105,7 +105,7 @@ public struct CloudLLM: Codable, Equatable, Sendable {
 public struct Mode: Codable, Equatable, Sendable {
     public static let currentVersion = 1
 
-    public var language: Language = .hinglish
+    public var language: Language = .english
     public var cleanup: CleanupMode = .off
     public var speech: SpeechProvider = .local
     public var cloudLLM = CloudLLM()
@@ -135,7 +135,7 @@ public struct Mode: Codable, Equatable, Sendable {
         func value<T: RawRepresentable>(_ key: CodingKeys, _ fallback: T) -> T where T.RawValue == String {
             (try? container.decodeIfPresent(String.self, forKey: key)).flatMap { $0.flatMap(T.init(rawValue:)) } ?? fallback
         }
-        language = value(.language, .hinglish)
+        language = value(.language, .english)
         cleanup = value(.cleanup, .off)
         speech = value(.speech, .local)
         cloudLLM = (try? container.decodeIfPresent(LenientCloudLLM.self, forKey: .cloudLLM))?.value ?? CloudLLM()
@@ -211,10 +211,14 @@ public final class ModeStore {
         if let data = defaults.data(forKey: Self.key) {
             mode = (try? JSONDecoder().decode(Mode.self, from: data)) ?? Mode()
         } else {
-            // Settings from before modes existed: carried over, saved as the Mode, then removed.
+            // Settings from before modes existed: carried over, saved as the Mode, then removed. Those installs
+            // ran Hinglish unless English was picked; a new install has none (nor finished setup) and starts in
+            // English. The setup flag is still the app's, so it stays.
+            let language = defaults.string(forKey: "language"), cleanup = defaults.string(forKey: "cleanupMode")
+            let ranBefore = language != nil || cleanup != nil || defaults.bool(forKey: "onboardingComplete")
             var migrated = Mode()
-            migrated.language = defaults.string(forKey: "language").flatMap(Language.init(rawValue:)) ?? .hinglish
-            migrated.cleanup = CleanupMode(storedValue: defaults.string(forKey: "cleanupMode"))
+            if ranBefore { migrated.language = language.flatMap(Language.init(rawValue:)) ?? .hinglish }
+            migrated.cleanup = CleanupMode(storedValue: cleanup)
             mode = migrated
             if let data = try? JSONEncoder().encode(migrated) { defaults.set(data, forKey: Self.key) }
             defaults.removeObject(forKey: "language")

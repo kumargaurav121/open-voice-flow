@@ -77,7 +77,7 @@ struct OnboardingView: View {
             }
         case .tryIt(let dictated):
             StepLayout(symbol: "mic", title: "Try It",
-                       message: "Click in the box, hold fn, say something, then let go.") {
+                       message: "Click in the box, hold fn, say something, then let go. For Hindi or mixed speech, first pick Hinglish under Language in the menu bar.") {
                 TryItBox(dictated: dictated)
             }
         case .finished:
