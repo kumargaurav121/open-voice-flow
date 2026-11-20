@@ -35,8 +35,8 @@ public struct TranscriptPipeline {
         )
     }
 
-    /// Dictation: the rules cleanup, spoken punctuation and line breaks, then the AI cleanup the user switched
-    /// on (nil when off). Code editors and terminals get the raw transcript.
+    /// Dictation: the rules cleanup, spoken punctuation and line breaks, the AI cleanup the user switched on (nil
+    /// when off), then lists. Code editors and terminals get the raw transcript.
     public func dictation(selectedAI: @escaping () -> TextCleaner?, isCodeContext: @escaping () -> Bool,
                           log: @escaping (String) -> Void) -> SpeechToText {
         CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI, isCodeContext: isCodeContext,

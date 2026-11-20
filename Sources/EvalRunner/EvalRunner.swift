@@ -45,7 +45,9 @@ struct EvalRunner {
             let clock = ContinuousClock()
             var ai = ""
             let took = try await clock.measure { ai = try await cleaner.clean(rules) }
-            print("raw:   \(text)\nrules: \(rules)\nai:    \(ai)  (\(took), guard \(AICleanupGuard.accepts(original: rules, rewritten: ai) ? "accepts" : "rejects"))")
+            let accepted = CleanupSpeechToText.accepted(ai, over: rules)
+            print("raw:   \(text)\nrules: \(rules)\nai:    \(ai)  (\(took), guard \(accepted != nil ? "accepts" : "rejects"))")
+            print("final: \(CleanupSpeechToText.layout(accepted ?? rules))")  // as pasted, AI cleanup on
             return
         }
         let clips = URL(filePath: args["--clips"] ?? "docs/eval/clips", directoryHint: .isDirectory)

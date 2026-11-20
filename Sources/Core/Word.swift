@@ -1,6 +1,7 @@
 import Foundation
 
-/// One space-separated word of a text, and the punctuation around it (`SpokenNumbers`, `SpokenPunctuation`).
+/// One space-separated word of a text, and the punctuation around it (`SpokenNumbers`, `SpokenPunctuation`,
+/// `SpokenLists`).
 struct Word {
     let raw: String
     let lead: Substring

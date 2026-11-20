@@ -38,6 +38,7 @@ Dictation now has line breaks ("new line", "new paragraph", `SpokenPunctuation`)
 - **A list number opening a line ("1.", "2)") is layout,** on both sides: never a new word, and never standing in
   for a spoken one.
 - Nothing else changed: a line break isn't a boundary for fillers.
-- **Conflicts to settle later:** v2 story 50 wants lists and line breaks from the AI accepted, and ticket 13 wants
-  the AI to lay an email out in paragraphs. Both need the break rule loosened (for example, breaks may be added
-  but not removed) in tickets 10 and 13.
+- **Lists don't need the AI (v2 ticket 10):** they are laid out by rules after the AI pass, on whichever text was
+  used, so they survive AI cleanup (v2 story 50). Fast and Thorough left eval items 38 and 39's enumerators in place.
+- **To settle in ticket 13:** it wants the AI to lay an email out in paragraphs, which needs the break rule
+  loosened (for example, breaks may be added but not removed).
