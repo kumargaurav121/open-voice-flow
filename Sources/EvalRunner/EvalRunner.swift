@@ -41,7 +41,7 @@ struct EvalRunner {
         if let text = args["--clean-text"] {
             let cleaner = LLMCleaner(folder: llmFolder)
             try await cleaner.prepare()
-            let rules = RulesCleanup.clean(text)
+            let rules = CleanupSpeechToText.rules(text, formatting: true)  // as dictation
             let clock = ContinuousClock()
             var ai = ""
             let took = try await clock.measure { ai = try await cleaner.clean(rules) }

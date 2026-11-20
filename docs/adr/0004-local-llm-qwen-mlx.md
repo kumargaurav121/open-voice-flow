@@ -1,6 +1,6 @@
 # 4. Local LLM on MLX-Swift (Qwen3; see amendment)
 
-Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05)
+Status: Accepted · 2026-10-08 · Amended 2026-10-09 (ticket 05), 2026-11-20 (v2 ticket 09)
 
 ## Context
 Need fast cleanup and reliable structured intent parsing, incl. Hindi. Small Llama models are weak at tool calling; Apple Foundation Models lacks Hindi; Ollama is a separate app and can't host STT models.
@@ -30,3 +30,14 @@ ki …") by pattern, instantly and exactly. Only other phrasings go to the LLM, 
 recipient the speaker didn't name is "unknown". The model only extracts; nothing is executed until the
 adapter (ticket 12). See docs/eval/reports/2026-10-10-commands.md.
 
+## Amendment (v2 ticket 09)
+Dictation now has line breaks ("new line", "new paragraph", `SpokenPunctuation`), and the guard handles layout:
+- **The rewrite must keep exactly the same line breaks,** or the rules text is used (the user's choice,
+  2026-11-20). Fast put eval item 42 on one line and Thorough merged its paragraph break, so with AI cleanup on, a
+  dictation with breaks gets the rules text. The cleanup prompt doesn't mention breaks yet.
+- **A list number opening a line ("1.", "2)") is layout,** on both sides: never a new word, and never standing in
+  for a spoken one.
+- Nothing else changed: a line break isn't a boundary for fillers.
+- **Conflicts to settle later:** v2 story 50 wants lists and line breaks from the AI accepted, and ticket 13 wants
+  the AI to lay an email out in paragraphs. Both need the break rule loosened (for example, breaks may be added
+  but not removed) in tickets 10 and 13.

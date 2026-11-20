@@ -5,6 +5,8 @@ import Foundation
 /// - every dropped word must be a filler where it was dropped, or a nearby repeat of a word it kept;
 /// - it may not add words or shrink the text below half;
 /// - it must stay in English letters.
+/// Line breaks are the speaker's ("new line", "new paragraph"): the rewrite keeps exactly the same ones. Colons and
+/// list numbers opening a line ("1.", "2)") are layout, not words.
 /// Anything else (an answer, a translation, a dropped "mujhe lagta hai ki", "I like it" → "I it") is
 /// rejected and the rules-cleaned text is used instead.
 public enum AICleanupGuard {
@@ -23,9 +25,10 @@ public enum AICleanupGuard {
     static let boundaryFillers: Set<String> = ["so", "like", "actually", "well", "na", "toh", "matlab", "yaani"]
 
     public static func accepts(original: String, rewritten: String) -> Bool {
-        let spoken = tokens(original)
-        let cleaned = tokens(rewritten).map(\.word)
-        guard !cleaned.isEmpty, !spoken.isEmpty,
+        // List numbers are layout on both sides: never a word, nor standing in for a spoken one.
+        let spoken = tokens(original).filter { !$0.isListNumber }
+        let cleaned = tokens(rewritten).filter { !$0.isListNumber }.map(\.word)
+        guard !cleaned.isEmpty, !spoken.isEmpty, breaks(original) == breaks(rewritten),
               !rewritten.unicodeScalars.contains(where: isIndicOrArabic)
         else { return false }
         let vocabulary = Set(spoken.map(\.word))
@@ -33,6 +36,23 @@ public enum AICleanupGuard {
         return Double(newWords) / Double(cleaned.count) <= maxNewWordShare
             && Double(cleaned.count) / Double(spoken.count) >= minLengthRatio
             && onlyFillersAndRepeatsDeleted(spoken: spoken, cleaned: cleaned)
+    }
+
+    // MARK: Layout
+
+    /// The text's line breaks in order: 1 for a new line, 2 for a new paragraph (any blank lines).
+    private static func breaks(_ text: String) -> [Int] {
+        var result: [Int] = []
+        var blankLine = false
+        for line in text.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n").dropFirst() {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                blankLine = true
+            } else {
+                result.append(blankLine ? 2 : 1)
+                blankLine = false
+            }
+        }
+        return result
     }
 
     // MARK: Deletions
@@ -84,21 +104,28 @@ public enum AICleanupGuard {
         var boundaryBefore: Bool
         /// Ends the text or is followed by a , . ; : ? !
         var boundaryAfter: Bool
+        /// "1." or "2)" opening a line: layout, not a word said.
+        var isListNumber = false
     }
 
     private static func tokens(_ text: String) -> [Token] {
-        let pieces = text.replacingOccurrences(of: "\u{2019}", with: "'").lowercased().split(whereSeparator: \.isWhitespace)
+        let lines = text.replacingOccurrences(of: "\u{2019}", with: "'").lowercased().split(separator: "\n")
         var result: [Token] = []
         var afterBoundary = true
-        for piece in pieces {
-            let words = piece.split { !$0.isLetter && !$0.isNumber && $0 != "'" }.map { canonical(String($0)) }
-            let endsWithBoundary = piece.last.map { ",.;:?!".contains($0) } ?? false
-            for (index, word) in words.enumerated() {
-                result.append(Token(word: word,
-                                    boundaryBefore: index == 0 && afterBoundary,
-                                    boundaryAfter: index == words.count - 1 && endsWithBoundary))
+        for line in lines {
+            let pieces = line.split(whereSeparator: \.isWhitespace)
+            for (position, piece) in pieces.enumerated() {
+                let words = piece.split { !$0.isLetter && !$0.isNumber && $0 != "'" }.map { canonical(String($0)) }
+                let endsWithBoundary = piece.last.map { ",.;:?!".contains($0) } ?? false
+                let isListNumber = position == 0 && piece.range(of: #"^\d+[.)]$"#, options: .regularExpression) != nil
+                for (index, word) in words.enumerated() {
+                    result.append(Token(word: word,
+                                        boundaryBefore: index == 0 && afterBoundary,
+                                        boundaryAfter: index == words.count - 1 && endsWithBoundary,
+                                        isListNumber: isListNumber))
+                }
+                if !words.isEmpty { afterBoundary = endsWithBoundary }
             }
-            if !words.isEmpty { afterBoundary = endsWithBoundary }
         }
         if !result.isEmpty { result[result.count - 1].boundaryAfter = true }
         return result

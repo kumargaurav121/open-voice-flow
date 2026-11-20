@@ -35,18 +35,19 @@ public struct TranscriptPipeline {
         )
     }
 
-    /// Dictation: the rules cleanup plus the AI cleanup the user switched on (nil when off). Code editors
-    /// and terminals get the raw transcript.
+    /// Dictation: the rules cleanup, spoken punctuation and line breaks, then the AI cleanup the user switched
+    /// on (nil when off). Code editors and terminals get the raw transcript.
     public func dictation(selectedAI: @escaping () -> TextCleaner?, isCodeContext: @escaping () -> Bool,
                           log: @escaping (String) -> Void) -> SpeechToText {
         CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI, isCodeContext: isCodeContext,
-                            timeout: Self.cleanupTimeout, log: log)
+                            formatting: true, timeout: Self.cleanupTimeout, log: log)
     }
 
     /// Commands get the rules cleanup but never AI cleanup: it would add seconds, could reword the command
-    /// itself, and would send it to the cloud when Cloud cleanup is on.
+    /// itself, and would send it to the cloud when Cloud cleanup is on. Nor spoken punctuation: a line break
+    /// would cut the message off (the parser reads one line).
     public func commands() -> SpeechToText {
         CleanupSpeechToText(wrapping: transcription, selectedAI: { nil }, isCodeContext: { false },
-                            timeout: Self.cleanupTimeout, log: { _ in })
+                            formatting: false, timeout: Self.cleanupTimeout, log: { _ in })
     }
 }

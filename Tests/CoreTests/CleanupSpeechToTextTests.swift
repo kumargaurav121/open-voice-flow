@@ -30,7 +30,7 @@ struct CleanupSpeechToTextTests {
         var logged: [String] = []
         let selected: TextCleaner? = aiEnabled ? ai : nil, code = codeContext
         let cleanup = CleanupSpeechToText(wrapping: model, selectedAI: { selected }, isCodeContext: { code },
-                                          timeout: timeout, log: { logged.append($0) })
+                                          formatting: false, timeout: timeout, log: { logged.append($0) })
         let text = try await cleanup.transcribe(clip, language: .hinglish)
         return (text, logged)
     }
@@ -135,7 +135,7 @@ struct CleanupSelectionTests {
         let fast = FakeCleaner(), thorough = FakeCleaner()
         var choice: TextCleaner? = fast
         let cleanup = CleanupSpeechToText(wrapping: model, selectedAI: { choice }, isCodeContext: { false },
-                                          timeout: .seconds(1), log: { _ in })
+                                          formatting: false, timeout: .seconds(1), log: { _ in })
         let clip = AudioClip(samples: [0.1], sampleRate: 16_000)
 
         _ = try await cleanup.transcribe(clip, language: .english)
