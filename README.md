@@ -54,12 +54,13 @@ Nothing, so tapping `fn` doesn't also open it; your setting comes back when the 
 | | |
 |---|---|
 | **Dictate** | Hold `fn`, speak, release. Text goes into the focused field. Say "comma", "full stop", "question mark", "new line" or "new paragraph" for the mark or the break; "first… second…" or "one, … two, …" makes a numbered list. |
+| **Undo Formatting** | `⌃⌥Z` (or **Undo Formatting** in the menu) puts your last dictation back as you said it: no spoken punctuation, line breaks, list or AI changes (fillers stay out). Only while it's still exactly as pasted, right before the cursor; otherwise nothing changes. In Slack, one-line dictations only. |
 | **Hands-free** | Double-tap `fn`, speak as long as you like (the notch shows a lock and a timer), tap `fn` again to paste. `Esc` throws it away; it stops by itself after 10 minutes. |
 | **Command** | Hold Right `⌥`, say e.g. *"Message Priya saying the deck is ready"* or, in Hinglish mode, *"Gurjeet ko message karo ki main meeting mein hoon"*. The notch shows the steps as Slack opens, finds the person, opens the DM and writes the message, then counts down 3 s before sending. Unknown commands say "Can't do that yet" and copy the transcript; nothing is ever typed. |
 | **Stop** | `Esc`: cancels a recording (hands-free too), a dictation not yet pasted, a command being understood, or an action at any step before the send. |
 
 The menu bar icon has **Language** (English, the default, or Hinglish for Hindi and mixed speech),
-**AI Cleanup** (Off / Fast / Thorough / Cloud), **Recent** and **History…**, and **Settings…** (hotkeys,
+**AI Cleanup** (Off / Fast / Thorough / Cloud), **Recent**, **History…** and **Undo Formatting**, and **Settings…** (hotkeys,
 send countdown, providers and keys, dictionary, privacy). Add names and product terms in **Settings →
 Dictionary** so they come out spelled your way.
 

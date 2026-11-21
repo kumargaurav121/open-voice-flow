@@ -4,6 +4,13 @@ struct FieldState: Equatable {
     var selection: Range<Int>
 }
 
+/// The focused field as Undo Formatting reads it: its state, when it can be read (never for a password field),
+/// and what was found, for the log (its role, or why there's none; never the text).
+struct FieldReading: Equatable {
+    var diagnostic: String
+    var state: FieldState?
+}
+
 /// What happened when we tried to type straight into the focused field via Accessibility.
 enum DirectInsertResult: Equatable {
     /// No focused text field, or it refused the insert.

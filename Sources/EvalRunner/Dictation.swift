@@ -79,4 +79,6 @@ private final class CapturingInserter: TextInserter {
     func insert(_ text: String) async throws {
         last = text
     }
+
+    func replace(_ old: String, with new: String) async throws -> Bool { false }
 }

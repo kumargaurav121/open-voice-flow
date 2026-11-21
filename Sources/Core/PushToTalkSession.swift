@@ -62,7 +62,11 @@ public final class PushToTalkSession {
     private let live: LiveTranscriber?
     private let handsFreeLimit: TimeInterval
     private let speechReady: (Language) -> Bool
+    /// The dictation's last transcript before formatting (`CleanupSpeechToText.unformatted`).
+    private let unformatted: () -> String?
     private var state = State.idle
+    /// The last pasted dictation and its text before formatting, until the next dictation (Undo Formatting).
+    private var lastDictation: (pasted: String, unformatted: String)?
     /// Esc pressed while a command was being transcribed or understood: its result is dropped.
     private var commandCancelled = false
     private var processingCommand = false
@@ -88,7 +92,8 @@ public final class PushToTalkSession {
         commandSpeechToText: SpeechToText? = nil,
         live: LiveTranscriber? = nil,
         handsFreeLimit: TimeInterval = PushToTalkSession.handsFreeLimit,
-        speechReady: @escaping (Language) -> Bool = { _ in true }
+        speechReady: @escaping (Language) -> Bool = { _ in true },
+        unformatted: @escaping () -> String? = { nil }
     ) {
         self.recorder = recorder
         self.speechToText = speechToText
@@ -101,6 +106,7 @@ public final class PushToTalkSession {
         self.live = live
         self.handsFreeLimit = handsFreeLimit
         self.speechReady = speechReady
+        self.unformatted = unformatted
     }
 
     public func keyDown(_ kind: SessionKind = .dictation) {
@@ -113,6 +119,7 @@ public final class PushToTalkSession {
             return
         }
         guard case .idle = state, kind == .dictation || commands != nil else { return }
+        if kind == .dictation { lastDictation = nil }
         let secondTap = kind == .dictation && tapReleasedAt.map { now() - $0 <= Self.doubleTapWindow } == true
         tapReleasedAt = nil
         let language = language()
@@ -169,6 +176,26 @@ public final class PushToTalkSession {
         live?.discard()
         state = .idle
         onEvent(.ignored(.cancelled))
+    }
+
+    /// Whether the last dictation was formatted and can still be undone (until the next dictation starts).
+    public var canUndoFormatting: Bool { lastDictation != nil }
+
+    /// Undo Formatting: puts the last dictation back as it was before formatting, if it's still exactly as
+    /// pasted just before the cursor; otherwise says it can't, and it can be tried again (once that text is back,
+    /// or the field can be read).
+    public func undoFormatting() async {
+        guard case .idle = state, let last = lastDictation else { return }
+        // Busy until it's done: a new dictation's text would land in the middle of the replacement.
+        state = .processing
+        defer { state = .idle }
+        do {
+            let replaced = try await inserter.replace(last.pasted, with: last.unformatted)
+            if replaced { lastDictation = nil }
+            onEvent(replaced ? .formattingUndone : .cantUndoFormatting)
+        } catch {
+            onEvent(.failed(.insertion))
+        }
     }
 
     /// New audio while dictating. After the recording ends, finish() takes what's left itself.
@@ -275,6 +302,7 @@ public final class PushToTalkSession {
         }
 
         let transcribedAt = now()
+        let unformatted = unformatted()?.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             try await inserter.insert(text)
         } catch {
@@ -282,6 +310,7 @@ public final class PushToTalkSession {
             onTranscript(SessionTranscript(text: text, language: language, app: app, inserted: false, clip: clip))
             return
         }
+        if let unformatted, unformatted != text { lastDictation = (text, unformatted) }
         // The notch hears first; saving to history comes after.
         onEvent(.inserted(SessionTimings(
             capture: releasedAt - pressedAt,

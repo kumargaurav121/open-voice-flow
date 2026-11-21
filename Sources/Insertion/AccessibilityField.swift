@@ -8,20 +8,16 @@ final class AccessibilityField: FocusedField {
     /// Chromium/Electron fields can apply the change a moment later; look again before giving up.
     static let recheckDelay: Duration = .milliseconds(80)
 
+    /// Electron apps (Slack) and Chromium browsers build their accessibility tree only once asked, a moment
+    /// later: how long to keep looking for their focused field.
+    static let wakeWait: Duration = .seconds(1)
+    static let wakeInterval: Duration = .milliseconds(100)
+
     func insertAtCursor(_ text: String) async -> DirectInsertResult {
-        let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, Self.messagingTimeout)
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID()
-        else { return .refused(diagnostic: "no focused element") }
-        let element = focused as! AXUIElement  // type checked above
-        AXUIElementSetMessagingTimeout(element, Self.messagingTimeout)
+        guard let element = focusedElement() else { return .refused(diagnostic: "no focused element") }
         let role = string(element, kAXRoleAttribute) ?? "?"
         // Password fields: leave them to the paste path, and never read them.
-        if string(element, kAXSubroleAttribute) == (kAXSecureTextFieldSubrole as String) {
-            return .refused(diagnostic: "secure field")
-        }
+        if isSecure(element) { return .refused(diagnostic: "secure field") }
         var settable: DarwinBoolean = false
         guard AXUIElementIsAttributeSettable(element, kAXSelectedTextAttribute as CFString, &settable) == .success,
               settable.boolValue
@@ -36,6 +32,86 @@ final class AccessibilityField: FocusedField {
             after = state(of: element)
         }
         return .attempted(before: before, after: after, diagnostic: "role \(role), \(describe(before)) → \(describe(after))")
+    }
+
+    // MARK: Undo Formatting
+
+    func reading() async -> FieldReading {
+        var element = focusedElement()
+        var asked: Bool?
+        if element == nil {
+            asked = wakeFrontmostApp()
+            var waited = Duration.zero
+            while asked == true, element == nil, waited < Self.wakeWait {
+                try? await Task.sleep(for: Self.wakeInterval)
+                waited += Self.wakeInterval
+                element = focusedElement()
+            }
+        }
+        guard let element else {
+            let diagnostic = asked == true ? "no focused field, even after the app took the request for its fields"
+                : "no focused field, and the app refused the request for its fields"
+            return FieldReading(diagnostic: diagnostic, state: nil)
+        }
+        guard !isSecure(element) else { return FieldReading(diagnostic: "secure field", state: nil) }
+        return FieldReading(diagnostic: "role \(string(element, kAXRoleAttribute) ?? "?")", state: state(of: element))
+    }
+
+    func text(in range: Range<Int>) async -> String? {
+        guard let element = focusedElement(), !isSecure(element) else { return nil }
+        var cfRange = CFRange(location: range.lowerBound, length: range.count)
+        if let parameter = AXValueCreate(.cfRange, &cfRange) {
+            var value: CFTypeRef?
+            if AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute as CFString,
+                                                          parameter, &value) == .success,
+               let text = value as? String {
+                return text
+            }
+        }
+        // Fields without ranged reads: the whole text.
+        guard let whole = string(element, kAXValueAttribute).map({ $0 as NSString }), range.upperBound <= whole.length
+        else { return nil }
+        return whole.substring(with: NSRange(location: range.lowerBound, length: range.count))
+    }
+
+    func select(_ range: Range<Int>) async -> Range<Int>? {
+        guard let element = focusedElement(), !isSecure(element) else { return nil }
+        var cfRange = CFRange(location: range.lowerBound, length: range.count)
+        guard let value = AXValueCreate(.cfRange, &cfRange) else { return nil }
+        AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value)
+        var shown = selection(of: element)
+        if shown != range {
+            try? await Task.sleep(for: Self.recheckDelay)
+            shown = selection(of: element)
+        }
+        return shown
+    }
+
+    /// Asks the frontmost app to build its accessibility tree (Electron's flag, which Slack's action also
+    /// sets); false when it doesn't take it (native apps).
+    private func wakeFrontmostApp() -> Bool {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return false }
+        let element = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(element, Self.messagingTimeout)
+        return AXUIElementSetAttributeValue(element, "AXManualAccessibility" as CFString, kCFBooleanTrue) == .success
+    }
+
+    // MARK: Reading the field
+
+    private func focusedElement() -> AXUIElement? {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, Self.messagingTimeout)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID()
+        else { return nil }
+        let element = focused as! AXUIElement  // type checked above
+        AXUIElementSetMessagingTimeout(element, Self.messagingTimeout)
+        return element
+    }
+
+    private func isSecure(_ element: AXUIElement) -> Bool {
+        string(element, kAXSubroleAttribute) == (kAXSecureTextFieldSubrole as String)
     }
 
     private func state(of element: AXUIElement) -> FieldState? {

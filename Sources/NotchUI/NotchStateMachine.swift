@@ -105,6 +105,11 @@ public struct NotchStateMachine: Sendable {
         case .session(.failed(let failure)):
             phase = .error(NotchError(failure), expanded: false)
             return scheduleReturn(after: Self.errorHold)
+        case .session(.formattingUndone):
+            phase = .idle  // the text changing is the feedback
+        case .session(.cantUndoFormatting):
+            phase = .error(.cantUndoFormatting, expanded: false)
+            return scheduleReturn(after: Self.errorHold)
         case .clicked:
             guard case .error(let error, let expanded) = phase else { return nil }
             timerToken += 1  // supersede the pending collapse either way
@@ -216,6 +221,14 @@ public struct NotchError: Sendable, Equatable {
         NotchError(message: "\(language.displayName) model still loading",
                    details: "Nothing was recorded. The first time, macOS prepares the model for this Mac's Neural Engine, which can take a few minutes; after that it loads in seconds. Try again when the menu bar icon is back to normal.")
     }
+
+    /// Undo Formatting couldn't find the last dictation as pasted, right before the cursor, and left it alone.
+    /// Often nothing was edited: the app reports its text differently, or (an Electron app, the first time)
+    /// hadn't shown its text yet.
+    public static let cantUndoFormatting = NotchError(
+        message: "Couldn't undo formatting",
+        details: "Undo Formatting only replaces your last dictation while it's exactly as pasted, right before the cursor. Some apps show their text differently (in Slack, dictations with line breaks or lists), and Slack or a browser can need a moment the first time: try again. Nothing was changed."
+    )
 
     public init(_ failure: SessionFailure) {
         switch failure {

@@ -32,6 +32,7 @@ Live preview of the words while speaking, conversational agent, multiple Modes, 
 | Hands-free | double-tap `fn` | Record without holding (lock and timer in the notch); the next tap of `fn` → transcribe → insert; stops by itself after 10 min |
 | Command | hold Right `⌥` | Record while held; on release → transcribe → parse intent → run action |
 | Cancel | `Esc` | Cancel recording, processing, or a running action at any step |
+| Undo Formatting | `⌃⌥Z` | The last dictation back as it was before formatting (§4.2 step 5); fixed, system-wide, never seen by the focused app |
 
 Very short presses (< ~250 ms) are ignored, except that two quick taps of the dictation key (the second within 0.35 s of the first's release) start hands-free. While it runs, the dictation key's clean tap stops it, other keys and key combinations are ignored, and Esc discards it. While fn is a hotkey, the app holds macOS's "Press 🌐 key to" at Do Nothing (its own action can't be swallowed: macOS runs it ahead of every event tap) and puts the user's setting back on quit. In Settings → General, Dictate and Command can each be any of fn, Right ⌥, Right ⌘, Right ⌃, Right ⇧ (held alone, so they never type or clash with app shortcuts); the two must differ. Cancel isn't rebindable: Esc, or any other key pressed while a hotkey is held.
 
@@ -64,6 +65,7 @@ Very short presses (< ~250 ms) are ignored, except that two quick taps of the di
    - **script**: output is always English letters and Western digits (user requirement). The Hinglish model writes Roman script itself; `LatinScriptSpeechToText` transliterates any Devanagari or Arabic-script run that slips through.
    - Code editors and terminals (bundle-ID list) get the raw transcript: no cleanup at all.
 4. **Insert**: AX direct insert where the focused element supports it, else clipboard paste (`⌘V`) with the previous clipboard restored afterwards — unless the user changed the clipboard in the meantime.
+5. **Undo Formatting** (`⌃⌥Z` system-wide, or the menu; v2 ticket 12, ADR 0016): puts the last dictation back as it was before formatting, that is the rules cleanup alone (fillers stay out; spoken punctuation, breaks, lists and the AI's changes are undone). Only if nothing is selected and the text just before the cursor is exactly what was pasted: it is selected and the earlier text inserted over it. Otherwise nothing changes and the notch says "Couldn't undo formatting". Kept until the next dictation starts or it's undone; a refused undo can be tried again. In Slack only one-line dictations can be undone (line breaks and lists are refused).
 
 ### 4.3 Command pipeline
 
@@ -110,7 +112,7 @@ States (one state machine; one spring drives size, corners and content: opening 
 | Command | Cyan: parsed command (`→ Slack · Gurjeet · "…"`), or "Can't do that yet" with "Copied" (the transcript); 3 s, then closes |
 | Acting | The panel grows to list the action's steps: ✓ done, a spinner on the running step, hollow circles for the rest; the header shows who (the resolved full name once found) and the message, with an `esc` key cap. The send row becomes the countdown: a draining ring and "Sending in 3s" |
 | Sent / Stopped | Green ✓ "Sent to Gurjeet Singh", or "Stopped, nothing sent" after Esc; "Probably sent: check Slack" (orange) if Return was pressed but Slack didn't confirm |
-| Error | Red badge with a short shake, message in place of the waveform, "Details"; click expands the details, click "Close" dismisses. Also "Hinglish model still loading" (or English) when the key is pressed while that model loads: nothing is recorded |
+| Error | Red badge with a short shake, message in place of the waveform, "Details"; click expands the details, click "Close" dismisses. Also "Hinglish model still loading" (or English) when the key is pressed while that model loads: nothing is recorded; and "Couldn't undo formatting" |
 
 `Esc` while a hotkey is held cancels the recording (a chord, see ticket 01); `Esc` on its own stops a dictation or command still being transcribed or understood (the notch closes at once), or an action at any step before the send. The keyboard tap is listen-only, so the focused app also receives the `Esc`. The dictation transcript is *not* previewed before insertion (speed first).
 

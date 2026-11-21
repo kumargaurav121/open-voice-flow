@@ -6,6 +6,12 @@ import Core
 protocol FocusedField: AnyObject {
     /// Inserts at the cursor (replacing any selection) without touching the clipboard.
     func insertAtCursor(_ text: String) async -> DirectInsertResult
+    /// Its role and state; no state when there's no focused field, it's a password field, or it can't be read.
+    func reading() async -> FieldReading
+    /// The text in `range` (UTF-16), or nil when it can't be read.
+    func text(in range: Range<Int>) async -> String?
+    /// Selects `range`; returns the selection the field then shows (nil when unreadable).
+    func select(_ range: Range<Int>) async -> Range<Int>?
 }
 
 /// Sends ⌘V to the frontmost app.
@@ -41,6 +47,8 @@ public final class Inserter: TextInserter {
     static let restoreDelay: Duration = .milliseconds(500)
 
     public var onMethod: (InsertMethod) -> Void = { _ in }
+    /// Why a replacement was refused, for the session log (the field's role and positions, never its text).
+    public var onReplaceRefused: (String) -> Void = { _ in }
 
     private let field: FocusedField
     private let pasteboard: Pasteboard
@@ -74,6 +82,49 @@ public final class Inserter: TextInserter {
 
     public func insert(_ text: String) async throws {
         try await insert(text, tryingDirectInsert: true)
+    }
+
+    /// Selects `old` if it's exactly the text just before the cursor, then inserts `new` over it the usual way
+    /// (typed in, or pasted with the clipboard restored).
+    public func replace(_ old: String, with new: String) async throws -> Bool {
+        guard isTrusted() else { throw InserterError.accessibilityNotGranted }
+        let reading = await field.reading()
+        func refused(_ reason: String) -> Bool {
+            onReplaceRefused("\(reading.diagnostic), \(reason)")
+            return false
+        }
+        guard let cursor = reading.state?.selection else { return refused("field unreadable") }
+        guard cursor.isEmpty else { return refused("text selected") }
+        let range = (cursor.lowerBound - old.utf16.count)..<cursor.lowerBound
+        let found = range.lowerBound >= 0 ? await field.text(in: range) : nil
+        guard found == old else {
+            let context = "field length \(reading.state?.length ?? 0), cursor \(cursor.lowerBound)"
+            guard let found else { return refused("the text before the cursor is too short or unreadable (\(context))") }
+            return refused("the text before the cursor differs \(Self.difference(found, from: old)) (\(context))")
+        }
+        // Unselected, the new text would go in next to the old.
+        guard await field.select(range) == range else {
+            _ = await field.select(cursor)  // a stray selection would be typed over
+            return refused("the selection didn't take")
+        }
+        try await insert(new, tryingDirectInsert: true)
+        return true
+    }
+
+    /// Where `found` first differs from `expected`, without their words: letters and digits are named only as
+    /// such, other characters by code ("U+00A0" for a non-breaking space).
+    static func difference(_ found: String, from expected: String) -> String {
+        let (seen, wanted) = (Array(found.unicodeScalars), Array(expected.unicodeScalars))
+        let position = zip(seen, wanted).enumerated().first { $0.element.0 != $0.element.1 }?.offset
+            ?? min(seen.count, wanted.count)
+        func named(_ index: Int, in scalars: [Unicode.Scalar]) -> String {
+            guard index < scalars.count else { return "the end" }
+            let scalar = scalars[index]
+            if scalar.properties.isAlphabetic { return "a letter" }
+            if scalar.properties.numericType != nil { return "a digit" }
+            return String(format: "U+%04X", scalar.value)
+        }
+        return "at \(position) of \(wanted.count), \(named(position, in: seen)) for \(named(position, in: wanted))"
     }
 
     /// Pastes only, skipping the direct insert: for apps (Slack's Electron fields) where a direct insert can

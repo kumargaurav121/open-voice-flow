@@ -26,6 +26,11 @@ public enum SessionEvent: Equatable, Sendable {
     case commandUnknown(transcript: String)
     case ignored(IgnoreReason)
     case failed(SessionFailure)
+    /// Undo Formatting put the last dictation back as it was before formatting.
+    case formattingUndone
+    /// Undo Formatting left the last dictation alone: it wasn't exactly as pasted just before the cursor (edited,
+    /// or the app reports its text differently), or the field couldn't be read.
+    case cantUndoFormatting
 }
 
 /// A dictation's final text, for history. Reported whether or not it reached the app, so text that

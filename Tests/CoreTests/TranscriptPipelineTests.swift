@@ -14,20 +14,27 @@ struct TranscriptPipelineTests {
     var aiEnabled = false
     var codeContext = false
 
-    /// Holds the key for a second while the speech model "hears" `heard`; returns what was pasted.
-    func press(_ kind: SessionKind = .dictation, hearing heard: String, audio: [Float] = [])
-        async -> (pasted: String?, events: [SessionEvent]) {
-        model.transcript = heard
+    /// A session built as the app builds it, around the fake model, AI and inserter.
+    func makeSession() -> PushToTalkSession {
         let selected: TextCleaner? = aiEnabled ? ai : nil, codeContext = codeContext
         let pipeline = TranscriptPipeline(speech: model, terms: { ["Gurjeet"] }, isEnglishWord: { _ in false })
-        let session = PushToTalkSession(
+        let dictation = pipeline.dictation(selectedAI: { selected }, isCodeContext: { codeContext }, log: { _ in })
+        return PushToTalkSession(
             recorder: recorder,
-            speechToText: pipeline.dictation(selectedAI: { selected }, isCodeContext: { codeContext }, log: { _ in }),
+            speechToText: dictation,
             inserter: inserter, now: clock.now, language: { .hinglish },
             commands: CommandParser(model: { [commandModel] in commandModel }),
             commandSpeechToText: pipeline.commands(),
-            live: pipeline.live
+            live: pipeline.live,
+            unformatted: { dictation.unformatted }
         )
+    }
+
+    /// Holds the key for a second while the speech model "hears" `heard`; returns what was pasted.
+    func press(_ kind: SessionKind = .dictation, hearing heard: String, audio: [Float] = [],
+               on session: PushToTalkSession? = nil) async -> (pasted: String?, events: [SessionEvent]) {
+        model.transcript = heard
+        let session = session ?? makeSession()
         var events: [SessionEvent] = []
         session.onEvent = { events.append($0) }
         session.keyDown(kind)
@@ -35,6 +42,14 @@ struct TranscriptPipelineTests {
         clock.advance(by: 1)
         await session.keyUp()
         return (inserter.inserted.last, events)
+    }
+
+    /// Undo Formatting on `session`; returns what it reported.
+    func undo(on session: PushToTalkSession) async -> [SessionEvent] {
+        var events: [SessionEvent] = []
+        session.onEvent = { events.append($0) }
+        await session.undoFormatting()
+        return events
     }
 
     @Test func pastesTheDictionarysSpellingsWithFillersRemoved() async {
@@ -389,5 +404,115 @@ struct TranscriptPipelineTests {
     @Test func withoutAICleanupACorrectionStaysAsSpoken() async {
         #expect(await press(hearing: "Let's meet at four, actually no, let's make it five.").pasted
                 == "Let's meet at four, actually no, let's make it five.")
+    }
+
+    // MARK: Undo formatting (v2 ticket 12)
+
+    @Test func undoFormattingPutsBackTheTextBeforeFormatting() async {
+        let session = makeSession()
+        #expect(await press(hearing: "um first milk, second bread, third eggs", on: session).pasted
+                == "1. Milk\n2. Bread\n3. Eggs")
+
+        let events = await undo(on: session)
+
+        // Fillers stay removed; the list is undone.
+        #expect(inserter.replacements == [.init(old: "1. Milk\n2. Bread\n3. Eggs", new: "First milk, second bread, third eggs")])
+        #expect(events == [.formattingUndone])
+    }
+
+    @Test func undoFormattingLeavesEditedTextAloneAndSaysSo() async {
+        let session = makeSession()
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
+        inserter.fieldUnchanged = false  // the user typed after it
+
+        #expect(await undo(on: session) == [.cantUndoFormatting])
+        #expect(inserter.replacements.isEmpty)
+    }
+
+    @Test func aRefusedUndoCanBeTriedAgain() async {
+        let session = makeSession()
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
+        inserter.fieldUnchanged = false
+        _ = await undo(on: session)
+        inserter.fieldUnchanged = true  // the user deleted what they typed after it
+
+        #expect(await undo(on: session) == [.formattingUndone])
+        #expect(inserter.replacements == [.init(old: "Hi Rohan,\nThanks", new: "Hi Rohan comma new line thanks")])
+    }
+
+    @Test func undoFormattingWithoutAccessibilitySaysItCouldntPaste() async {
+        let session = makeSession()
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
+        inserter.error = FakeError()  // Accessibility was switched off
+
+        #expect(await undo(on: session) == [.failed(.insertion)])
+    }
+
+    @Test func onlyTheLastDictationCanBeUndoneAndOnlyOnce() async {
+        let session = makeSession()
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
+        await session.undoFormatting()
+        await session.undoFormatting()
+        #expect(inserter.replacements == [.init(old: "Hi Rohan,\nThanks", new: "Hi Rohan comma new line thanks")])
+
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
+        session.keyDown()  // the next dictation starts
+        await session.cancel()
+        await session.undoFormatting()
+
+        #expect(inserter.replacements.count == 1)
+    }
+
+    @Test mutating func withNothingToUndoUndoFormattingDoesNothing() async {
+        var session = makeSession()
+        #expect(!session.canUndoFormatting)  // nothing dictated yet
+        #expect(await undo(on: session).isEmpty)
+
+        _ = await press(hearing: "I'll be there at 5.", on: session)  // nothing was formatted
+        #expect(!session.canUndoFormatting)
+        #expect(await undo(on: session).isEmpty)
+
+        inserter.error = FakeError()
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)  // not pasted
+        inserter.error = nil
+        #expect(!session.canUndoFormatting)
+        #expect(await undo(on: session).isEmpty)
+
+        codeContext = true
+        session = makeSession()
+        _ = await press(hearing: "git commit dash m fix comma typo", on: session)  // code editors get it raw
+        #expect(!session.canUndoFormatting)
+        #expect(await undo(on: session).isEmpty)
+
+        #expect(inserter.replacements.isEmpty)
+    }
+
+    @Test func undoFormattingCanBeOfferedAfterAFormattedDictation() async {
+        let session = makeSession()
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
+
+        #expect(session.canUndoFormatting)
+    }
+
+    @Test func aPressWhileUndoingDoesNotStartADictation() async {
+        let session = makeSession()
+        _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
+        let starts = recorder.startCount
+        inserter.onReplace = { session.keyDown() }  // its text would land in the middle of the undo
+
+        _ = await undo(on: session)
+
+        #expect(recorder.startCount == starts)
+    }
+
+    @Test mutating func undoFormattingAlsoUndoesTheAICleanup() async {
+        aiEnabled = true
+        ai.reply = { _ in "Let's meet at five." }
+        let session = makeSession()
+        _ = await press(hearing: "Let's meet at four, actually no, let's make it five.", on: session)
+
+        await session.undoFormatting()
+
+        #expect(inserter.replacements == [.init(old: "Let's meet at five.", new: "Let's meet at four, actually no, let's make it five.")])
     }
 }

@@ -58,4 +58,7 @@ public protocol SpeechToText: AnyObject {
 @MainActor
 public protocol TextInserter: AnyObject {
     func insert(_ text: String) async throws
+    /// Replaces `old` with `new` if `old` is exactly the text just before the cursor, with nothing selected;
+    /// otherwise changes nothing and returns false.
+    func replace(_ old: String, with new: String) async throws -> Bool
 }

@@ -74,6 +74,25 @@ final class FakeInserter: TextInserter {
         if let error { throw error }
         inserted.append(text)
     }
+
+    struct Replacement: Equatable {
+        var old: String
+        var new: String
+    }
+
+    private(set) var replacements: [Replacement] = []
+    /// Whether the field still has the text to replace just before the cursor.
+    var fieldUnchanged = true
+
+    var onReplace: (() -> Void)?
+
+    func replace(_ old: String, with new: String) async throws -> Bool {
+        onReplace?()
+        if let error { throw error }
+        guard fieldUnchanged else { return false }
+        replacements.append(Replacement(old: old, new: new))
+        return true
+    }
 }
 
 @MainActor

@@ -1,6 +1,7 @@
 import Actions
 import AppKit
 import Audio
+import Carbon.HIToolbox
 import Cloud
 import Core
 import History
@@ -83,13 +84,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // (Hinglish) and the cloud are cut at every pause.
         partLengths: { [weak self] in $0 == .english && self?.modes.mode.speech == .local ? .long : .short }
     )
+    private lazy var dictation = pipeline.dictation(
+        selectedAI: { [weak self] in self?.activeCleaner },
+        isCodeContext: { CodeContext.isCodeEditor(bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") },
+        log: { [weak self] in self?.log.notice($0) }
+    )
     private lazy var session = PushToTalkSession(
         recorder: recorder,
-        speechToText: pipeline.dictation(
-            selectedAI: { [weak self] in self?.activeCleaner },
-            isCodeContext: { CodeContext.isCodeEditor(bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") },
-            log: { [weak self] in self?.log.notice($0) }
-        ),
+        speechToText: dictation,
         inserter: inserter,
         now: { ProcessInfo.processInfo.systemUptime },
         language: { [weak self] in self?.language ?? .hinglish },
@@ -97,7 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         commands: CommandParser(model: { [weak self] in self?.commandModel }, log: { [weak self] in self?.log.notice($0) }),
         commandSpeechToText: pipeline.commands(),
         live: pipeline.live,
-        speechReady: { [weak self] in self?.isSpeechReady(for: $0) ?? true }
+        speechReady: { [weak self] in self?.isSpeechReady(for: $0) ?? true },
+        unformatted: { [weak self] in self?.dictation.unformatted }
     )
     /// When the command key was released, for the "parsed in under 2 s" target.
     private var commandReleasedAt: TimeInterval?
@@ -114,6 +117,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var permissions = SystemPermissions.current() { didSet { refreshIcon() } }
     private var lastMessage: String?
     private var permissionTimer: Timer?
+    /// ⌃⌥Z for Undo Formatting, system-wide; nil when another app holds it (the menu item still works).
+    private var undoShortcut: GlobalShortcut?
 
     /// One cleaner per installed model, created on first use.
     private var cleaners: [CleanupMode: LLMCleaner] = [:]
@@ -242,6 +247,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         englishModel.onBreakdown = { [weak self] in self?.log.notice("STT parakeet: \($0)") }
         inserter.onMethod = { [weak self] in self?.log.notice($0.description) }
+        inserter.onReplaceRefused = { [weak self] in self?.log.notice("Undo Formatting: left alone (\($0))") }
+        undoShortcut = GlobalShortcut(keyCode: kVK_ANSI_Z, modifiers: controlKey | optionKey) { [weak self] in
+            self?.undoFormatting()
+        }
+        if undoShortcut == nil { log.error("Couldn't register ⌃⌥Z (another app holds it); Undo Formatting is in the menu") }
         session.onTranscript = { [weak self] in self?.record($0) }
 
         refreshPermissions()
@@ -314,6 +324,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func commandSeconds() -> Double {
         commandReleasedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? 0
+    }
+
+    // MARK: Undo Formatting
+
+    /// The menu item and ⌃⌥Z: the last dictation back as it was before formatting (ticket 12).
+    private func undoFormatting() {
+        // While an action drives Slack, the replacement would type into the middle of it.
+        guard actionRunner == nil else { return }
+        guard session.canUndoFormatting else {
+            log.notice("Undo Formatting: nothing to undo")
+            return
+        }
+        Task {
+            await modifiersReleased()
+            await session.undoFormatting()
+        }
+    }
+
+    /// ⌃⌥Z fires with ⌃⌥ still held, and a ⌘V posted then could carry them: waits up to a second for them to
+    /// lift.
+    private func modifiersReleased() async {
+        let held: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand, .maskShift]
+        let (limit, interval) = (Duration.seconds(1), Duration.milliseconds(50))
+        var waited = Duration.zero
+        while waited < limit, !CGEventSource.flagsState(.combinedSessionState).intersection(held).isEmpty {
+            try? await Task.sleep(for: interval)
+            waited += interval
+        }
     }
 
     // MARK: History
@@ -501,6 +539,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .insertion: "Couldn't paste the text"
             }
             log.error("Failed: \(failure)")
+        case .formattingUndone:
+            log.notice("Undo Formatting: the last dictation is back as it was before formatting")
+        case .cantUndoFormatting:
+            break  // the inserter logged why
         }
     }
 
@@ -550,6 +592,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(recentMenu())
         menu.addItem(item("History…") { [weak self] in self?.historyWindow.show() })
+        let undo = session.canUndoFormatting
+            ? item("Undo Formatting") { [weak self] in self?.undoFormatting() }
+            : disabled("Undo Formatting")
+        undo.keyEquivalent = "z"
+        undo.keyEquivalentModifierMask = [.control, .option]
+        menu.addItem(undo)
 
         menu.addItem(.separator())
         let languages = NSMenu()

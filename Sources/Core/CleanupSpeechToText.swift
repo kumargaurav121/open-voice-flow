@@ -18,6 +18,10 @@ public final class CleanupSpeechToText: SpeechToText {
     private let formatting: Bool
     private let timeout: Duration
     private let log: (String) -> Void
+    /// The last transcript before formatting (spoken punctuation, line breaks, AI cleanup, lists), for Undo
+    /// Formatting: only the rules cleanup's fillers, spacing, capitals and digits. In a code editor, the raw
+    /// transcript it got.
+    public private(set) var unformatted: String?
 
     public init(
         wrapping model: SpeechToText,
@@ -36,8 +40,13 @@ public final class CleanupSpeechToText: SpeechToText {
     }
 
     public func transcribe(_ clip: AudioClip, language: Language) async throws -> String {
+        unformatted = nil
         let raw = try await model.transcribe(clip, language: language)
-        guard !isCodeContext() else { return raw }
+        guard !isCodeContext() else {
+            unformatted = raw
+            return raw
+        }
+        unformatted = RulesCleanup.clean(raw)
         let cleaned = await aiCleaned(Self.rules(raw, formatting: formatting))
         return formatting ? Self.layout(cleaned) : cleaned
     }

@@ -186,4 +186,35 @@ struct NotchStateMachineTests {
         }
         #expect(delay == NotchStateMachine.errorHold)
     }
+
+    @Test func undoneFormattingLeavesTheNotchAtRest() {
+        // Even straight after a dictation's ✓, whose collapse it supersedes.
+        var notch = NotchStateMachine()
+        notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 0.5, insert: 0, parts: 0, tail: 1))))
+
+        let effect = notch.handle(.session(.formattingUndone))
+
+        #expect(notch.phase == .idle)
+        #expect(effect == nil)
+    }
+
+    @Test func undoFormattingThatCantUndoSaysSoBriefly() {
+        var notch = NotchStateMachine()
+
+        let effect = notch.handle(.session(.cantUndoFormatting))
+
+        guard case .error(let notice, expanded: false) = notch.phase else {
+            Issue.record("expected a short message")
+            return
+        }
+        // Neutral: often nothing was edited, the app just reports its text differently.
+        #expect(notice.message == "Couldn't undo formatting")
+        #expect(notice.details.contains("Nothing was changed"))
+        #expect(notice.details.contains("try again"))
+        guard case .returnToIdle(let delay, _) = effect else {
+            Issue.record("expected a scheduled return to idle")
+            return
+        }
+        #expect(delay == NotchStateMachine.errorHold)
+    }
 }
