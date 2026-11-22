@@ -37,9 +37,13 @@ public enum AppCategory: String, CaseIterable, Sendable {
 
 /// Each category's style, the last formatting step, after lists.
 enum AppStyle {
-    static func apply(_ text: String, for category: AppCategory) -> String {
-        switch category {
-        case .chat: casual(text)
+    /// - Parameter saidFullStop: the text ends with a full stop the speaker said, which a chat message keeps.
+    static func apply(_ text: String, for category: AppCategory, saidFullStop: Bool) -> String {
+        // A break said at the very start or end isn't pasted (every transcript is trimmed), so it can't hide the end
+        // or the greeting.
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return switch category {
+        case .chat: saidFullStop ? text : casual(text)
         case .email: email(text)
         case .code, .other: text
         }
@@ -50,7 +54,8 @@ enum AppStyle {
     /// A chat message of up to this many sentences loses its final full stop.
     static let shortMessage = 2
 
-    /// A short chat message without its final full stop; question and exclamation marks stay. Longer messages
+    /// A short chat message without the final full stop the speech model gave it; question and exclamation marks
+    /// stay, and so does a full stop said out loud (`apply`). Longer messages
     /// and lists keep theirs (a list's items all have one or none), and so does an ellipsis or an abbreviation
     /// ("p.m.").
     static func casual(_ text: String) -> String {
@@ -96,7 +101,10 @@ enum AppStyle {
         if let opening = text.range(of: greeting, options: .regularExpression) {
             greetedNames = Set(text[opening].split { !$0.isLetter })
             let rest = text[opening.upperBound...].drop { $0 == " " || $0 == "\t" }
-            if rest.first != "\n" { text = text[opening] + "\n\n" + String(rest).capitalizedFirst }
+            // Already on a line of its own (said, or the AI's): its breaks stay, and the text after it starts with a
+            // capital, which the AI may leave out.
+            let breaks = rest.first == "\n" ? rest.prefix(while: \.isWhitespace) : "\n\n"
+            text = text[opening] + breaks + String(rest.drop(while: \.isWhitespace)).capitalizedFirst
         }
         let whole = NSRange(text.startIndex..., in: text)
         guard let match = signOff.firstMatch(in: text, range: whole), let found = Range(match.range, in: text),

@@ -544,10 +544,19 @@ struct TranscriptPipelineTests {
         frontmostApp = "com.tinyspeck.slackmacgap"
 
         #expect(await press(hearing: "Running late. Start without me.").pasted == "Running late. Start without me")
-        #expect(await press(hearing: "Hi Rohan comma new line thanks for the update full stop").pasted
+        #expect(await press(hearing: "Hi Rohan comma new line thanks for the update.").pasted
                 == "Hi Rohan,\nThanks for the update")
         #expect(await press(hearing: "Are you free at five?").pasted == "Are you free at five?")
         #expect(await press(hearing: "We shipped it. Great work!").pasted == "We shipped it. Great work!")
+    }
+
+    @Test mutating func aFullStopSaidOutLoudStaysInAChatMessage() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+
+        #expect(await press(hearing: "see you at five full stop").pasted == "See you at five.")
+        #expect(await press(hearing: "See you at five, period.").pasted == "See you at five.")
+        #expect(await press(hearing: "Hi Rohan comma new line thanks for the update full stop new line").pasted
+                == "Hi Rohan,\nThanks for the update.")
     }
 
     @Test mutating func aLongerChatMessageKeepsItsFullStops() async {
@@ -565,6 +574,14 @@ struct TranscriptPipelineTests {
 
         #expect(await press(hearing: "Let me think...").pasted == "Let me think...")
         #expect(await press(hearing: "See you at 5 p.m.").pasted == "See you at 5 p.m.")
+    }
+
+    @Test mutating func aBreakSaidAtTheEndOrStartDoesntHideTheStyle() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+        #expect(await press(hearing: "See you at five. New line").pasted == "See you at five")
+
+        frontmostApp = "com.apple.mail"
+        #expect(await press(hearing: "New line hi Mark, thanks for the call.").pasted == "Hi Mark,\n\nThanks for the call.")
     }
 
     @Test mutating func aChatMessageCountsSentencesNotFullStops() async {
@@ -654,6 +671,15 @@ struct TranscriptPipelineTests {
 
         #expect(ai.styles == [.email])
         #expect(pasted == "Hi Mark,\n\nThanks for the call. The pilot starts Monday.\n\nCould you send me the names?\n\nThanks,\nKumar")
+    }
+
+    @Test mutating func theLineAfterTheAIsGreetingStartsWithACapital() async {
+        frontmostApp = "com.apple.mail"
+        aiEnabled = true
+        ai.reply = { _ in "Hi Rohan,\n\nkal ki meeting confirm hai.\n\nThanks,\nKumar" }  // as Thorough wrote it
+
+        #expect(await press(hearing: "Hi Rohan, kal ki meeting confirm hai. Thanks, Kumar").pasted
+                == "Hi Rohan,\n\nKal ki meeting confirm hai.\n\nThanks,\nKumar")
     }
 
     @Test mutating func anEmailsAICleanupMustKeepTheBreaksSpoken() async {

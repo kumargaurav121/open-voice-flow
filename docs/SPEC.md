@@ -65,8 +65,11 @@ Very short presses (< ~250 ms) are ignored, except that two quick taps of the di
    - **script**: output is always English letters and Western digits (user requirement). The Hinglish model writes Roman script itself; `LatinScriptSpeechToText` transliterates any Devanagari or Arabic-script run that slips through.
    - **Styles per app, dictation only, last** (`AppStyle`, v2 ticket 13, ADR 0017): the app in front (bundle ID, read
      as the text is about to go in) picks a style. Each can be switched off in Settings → Formatting.
-     - **Chat** (Slack, Teams, Messages, WhatsApp, Discord, Telegram): a message of one or two sentences loses its
-       final full stop. Question and exclamation marks, lists, an ellipsis and abbreviations ("p.m.") keep theirs.
+     - **Chat** (Slack, Teams, Messages, WhatsApp, Discord, Telegram): a message of one or two sentences loses the
+       final full stop the speech model gave it. These keep theirs:
+       - a full stop said out loud;
+       - question and exclamation marks;
+       - lists, an ellipsis, and abbreviations ("p.m.").
      - **Email** (Mail, Outlook):
        - A greeting opening the text ("Hi Mark,", "Good morning team,") goes on its own line, then a blank line.
        - A closing sign-off ("Thanks, Kumar", "Best regards, …") goes after a blank line, with the name below it.

@@ -14,6 +14,18 @@ enum SpokenPunctuation {
     static let dash = " - "
 
     static func apply(_ text: String) -> String {
+        render(pieces(text))
+    }
+
+    /// Whether the text ends with a full stop the speaker said ("see you at five full stop", breaks after it
+    /// aside), not one the speech model wrote.
+    static func endsWithSpokenFullStop(_ text: String) -> Bool {
+        let last = pieces(text).last { if case .word = $0 { true } else { false } }
+        guard case .word(let word)? = last else { return false }
+        return word.spoken.hasSuffix(".")
+    }
+
+    private static func pieces(_ text: String) -> [Piece] {
         let words = split(text)
         var output: [Piece] = []
         var capitaliseNext = false
@@ -32,7 +44,7 @@ enum SpokenPunctuation {
             }
             index = end
         }
-        return render(output)
+        return output
     }
 
     // MARK: Commands

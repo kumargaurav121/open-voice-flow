@@ -56,7 +56,7 @@ public final class CleanupSpeechToText: SpeechToText {
         }
         unformatted = RulesCleanup.clean(raw)
         let cleaned = await aiCleaned(Self.rules(raw, formatting: formatting), style: style)
-        return formatting ? Self.layout(cleaned, style: style) : cleaned
+        return formatting ? Self.layout(cleaned, style: style, raw: raw) : cleaned
     }
 
     /// The AI's rewrite when AI cleanup is on and the guard accepts it; otherwise the rules text.
@@ -100,8 +100,9 @@ public final class CleanupSpeechToText: SpeechToText {
     }
 
     /// Dictation's layout after the AI pass (or the rules text it fell back to): spoken lists as numbered lines,
-    /// then the app's style.
-    nonisolated public static func layout(_ cleaned: String, style: AppCategory) -> String {
-        AppStyle.apply(SpokenLists.apply(cleaned), for: style)
+    /// then the app's style. `raw` tells the style which marks were said (a full stop said stays in a chat).
+    nonisolated public static func layout(_ cleaned: String, style: AppCategory, raw: String) -> String {
+        AppStyle.apply(SpokenLists.apply(cleaned), for: style,
+                       saidFullStop: SpokenPunctuation.endsWithSpokenFullStop(RulesCleanup.clean(raw)))
     }
 }

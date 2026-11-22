@@ -23,7 +23,8 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
   - Code: the existing code-editor list (`CodeContext`).
   - Other: everything else, including web apps in a browser (out of scope).
   - The pipeline factory reads the app in front once per transcript, when the text is about to go in.
-- **Chat** drops the final full stop of a message of one or two sentences. These keep theirs:
+- **Chat** drops the final full stop the speech model gave a message of one or two sentences. These keep theirs:
+  - a full stop said out loud ("see you at five full stop"; the user's choice, 2026-11-22);
   - question and exclamation marks;
   - longer messages;
   - lists, so all of a list's items keep their stops;
@@ -31,7 +32,9 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
     as one.
 - **Email, rules (with AI on or off):**
   - **The greeting** goes on its own line with a blank line after it: "Hi Mark,", "Good morning team,", "Dear Mr.
-    Sharma,", "Hi,". It must open the dictation and end in a comma. A break the speaker said stays as said.
+    Sharma,", "Hi,". It must open the dictation and end in a comma.
+    - A break the speaker or the AI put after it stays as it is.
+    - The text after it starts with a capital: Thorough left "kal" lowercase.
   - **A sign-off ending the email**, after a sentence, goes after a blank line, with the name on the next line:
     "Thanks, Kumar" becomes "Thanks," then "Kumar". This was the user's choice, since sign-offs are a short
     fixed list.

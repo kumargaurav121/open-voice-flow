@@ -166,7 +166,7 @@ private struct FormattingTab: View {
         Form {
             Section {
                 style("Chat: casual", isOn: $modes.mode.styles.chat,
-                      "Slack, Teams, Messages, WhatsApp, Discord and Telegram: a message of one or two sentences has no full stop at the end.")
+                      "Slack, Teams, Messages, WhatsApp, Discord and Telegram: a message of one or two sentences has no full stop at the end, unless you say \"full stop\".")
                 style("Email: laid out", isOn: $modes.mode.styles.email,
                       "Mail and Outlook: the greeting and sign-off go on lines of their own. With AI Cleanup on Thorough or Cloud, the body is split into paragraphs.")
                 style("Code: exactly as spoken", isOn: $modes.mode.styles.code,

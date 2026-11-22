@@ -2,6 +2,9 @@
 
 Status: Accepted · 2026-11-20 (v2 tickets 09, 11)
 
+Amended by ADR 0017 (v2 ticket 13): a third widening, for email only. The rewrite may add line breaks, keeping
+every spoken one between the same words.
+
 ## Context
 - **The AI cleanup's rewrite is used only if `AICleanupGuard` accepts it** (ADR 0004). Until v2 it could delete only
   fillers and nearby repeats, add at most 20% new words, and had to keep half the text.
