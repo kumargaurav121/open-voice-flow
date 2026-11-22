@@ -3,20 +3,24 @@ import Foundation
 /// Optional AI rewrite of a transcript (fillers, punctuation, casing). Provided by the LLM package.
 @MainActor
 public protocol TextCleaner: AnyObject {
-    func clean(_ text: String) async throws -> String
+    /// - Parameter style: the style of the app the text goes to (an email's is laid out by the AI).
+    func clean(_ text: String, style: AppCategory) async throws -> String
 }
 
 /// Cleans every transcript: always the rules pass (for dictation with its formatting), plus the AI pass when
-/// the user has it switched on, then for dictation the layout (lists). Code editors and terminals get the raw
-/// transcript (a "cleaned" shell command is a broken one). Any AI timeout, failure or meaning-changing rewrite
-/// falls back to the rules output, and says why.
+/// the user has it switched on, then for dictation the layout (lists) and the app's style. Code editors and
+/// terminals get the raw transcript (a "cleaned" shell command is a broken one). Any AI timeout, failure or
+/// meaning-changing rewrite falls back to the rules output, and says why.
 @MainActor
 public final class CleanupSpeechToText: SpeechToText {
     private let model: SpeechToText
     private let selectedAI: () -> TextCleaner?
-    private let isCodeContext: () -> Bool
+    /// The style of the app the text goes to, read per transcript.
+    private let style: () -> AppCategory
     private let formatting: Bool
     private let timeout: Duration
+    /// The AI's time for an email, which it also lays out.
+    private let emailTimeout: Duration
     private let log: (String) -> Void
     /// The last transcript before formatting (spoken punctuation, line breaks, AI cleanup, lists), for Undo
     /// Formatting: only the rules cleanup's fillers, spacing, capitals and digits. In a code editor, the raw
@@ -26,40 +30,45 @@ public final class CleanupSpeechToText: SpeechToText {
     public init(
         wrapping model: SpeechToText,
         selectedAI: @escaping () -> TextCleaner?,
-        isCodeContext: @escaping () -> Bool,
+        style: @escaping () -> AppCategory,
         formatting: Bool,
         timeout: Duration,
+        emailTimeout: Duration,
         log: @escaping (String) -> Void
     ) {
         self.model = model
         self.selectedAI = selectedAI
-        self.isCodeContext = isCodeContext
+        self.style = style
         self.formatting = formatting
         self.timeout = timeout
+        self.emailTimeout = emailTimeout
         self.log = log
     }
 
     public func transcribe(_ clip: AudioClip, language: Language) async throws -> String {
         unformatted = nil
         let raw = try await model.transcribe(clip, language: language)
-        guard !isCodeContext() else {
+        let style = style()
+        if style != .other { log("Style: \(style)") }  // the app's kind, never the text
+        guard style != .code else {
             unformatted = raw
             return raw
         }
         unformatted = RulesCleanup.clean(raw)
-        let cleaned = await aiCleaned(Self.rules(raw, formatting: formatting))
-        return formatting ? Self.layout(cleaned) : cleaned
+        let cleaned = await aiCleaned(Self.rules(raw, formatting: formatting), style: style)
+        return formatting ? Self.layout(cleaned, style: style) : cleaned
     }
 
     /// The AI's rewrite when AI cleanup is on and the guard accepts it; otherwise the rules text.
-    private func aiCleaned(_ rules: String) async -> String {
+    private func aiCleaned(_ rules: String, style: AppCategory) async -> String {
         // The menu's current choice, read per transcript: nil when AI cleanup is off.
         guard let ai = selectedAI(), !rules.isEmpty else { return rules }
 
         let rewritten: String
         let started = ContinuousClock.now
+        let timeout = style == .email ? emailTimeout : timeout
         do {
-            rewritten = try await withTimeout(timeout) { try await ai.clean(rules) }
+            rewritten = try await withTimeout(timeout) { try await ai.clean(rules, style: style) }
         } catch is TimedOut {
             log("AI cleanup timed out after \(timeout); used rules cleanup")
             return rules
@@ -67,7 +76,7 @@ public final class CleanupSpeechToText: SpeechToText {
             log("AI cleanup failed (\(logSafe(error))); used rules cleanup")
             return rules
         }
-        guard let accepted = Self.accepted(rewritten, over: rules) else {
+        guard let accepted = Self.accepted(rewritten, over: rules, style: style) else {
             log("AI cleanup rejected (changed the meaning or the line breaks); used rules cleanup")
             return rules
         }
@@ -75,12 +84,12 @@ public final class CleanupSpeechToText: SpeechToText {
         return accepted
     }
 
-    /// The AI's rewrite, tidied, if the guard accepts it in place of the rules text.
-    nonisolated public static func accepted(_ rewritten: String, over rules: String) -> String? {
+    /// The AI's rewrite, tidied, if the guard accepts it in place of the rules text. An email's may add breaks.
+    nonisolated public static func accepted(_ rewritten: String, over rules: String, style: AppCategory) -> String? {
         // Some models end a line with spaces (Markdown's line break).
         let trimmed = rewritten.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: #"[ \t]+\n"#, with: "\n", options: .regularExpression)
-        return AICleanupGuard.accepts(original: rules, rewritten: trimmed) ? trimmed : nil
+        return AICleanupGuard.accepts(original: rules, rewritten: trimmed, mayAddBreaks: style == .email) ? trimmed : nil
     }
 
     /// The rules pass: the rules cleanup, then with `formatting` (dictation) spoken punctuation and line
@@ -90,8 +99,9 @@ public final class CleanupSpeechToText: SpeechToText {
         return formatting ? SpokenPunctuation.apply(cleaned) : cleaned
     }
 
-    /// Dictation's layout after the AI pass (or the rules text it fell back to): spoken lists as numbered lines.
-    nonisolated public static func layout(_ cleaned: String) -> String {
-        SpokenLists.apply(cleaned)
+    /// Dictation's layout after the AI pass (or the rules text it fell back to): spoken lists as numbered lines,
+    /// then the app's style.
+    nonisolated public static func layout(_ cleaned: String, style: AppCategory) -> String {
+        AppStyle.apply(SpokenLists.apply(cleaned), for: style)
     }
 }

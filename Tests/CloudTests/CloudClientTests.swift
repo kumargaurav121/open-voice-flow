@@ -123,7 +123,7 @@ final class StubAPI: URLProtocol, @unchecked Sendable {
     @Test func cleanupSendsTheSharedInstructionsToTheChosenService() async throws {
         StubAPI.reset(json: #"{"choices":[{"message":{"role":"assistant","content":"Message Gurjeet, I'm late."}}]}"#)
 
-        let cleaned = try await cleaner(.groq).clean("message gurjeet im late")
+        let cleaned = try await cleaner(.groq).clean("message gurjeet im late", style: .other)
 
         #expect(cleaned == "Message Gurjeet, I'm late.")
         let (request, body) = try #require(StubAPI.requests.first)
@@ -134,7 +134,7 @@ final class StubAPI: URLProtocol, @unchecked Sendable {
         #expect(json["temperature"] as? Double == 0)
         let messages = try #require(json["messages"] as? [[String: String]])
         #expect(messages == [
-            ["role": "system", "content": CleanupPrompt.instructions(vocabulary: ["Gurjeet"])],
+            ["role": "system", "content": CleanupPrompt.instructions(vocabulary: ["Gurjeet"], style: .other)],
             ["role": "user", "content": "message gurjeet im late"],
         ])
     }
@@ -142,7 +142,7 @@ final class StubAPI: URLProtocol, @unchecked Sendable {
     @Test func openAIUsesItsOwnEndpointAndTheChosenModel() async throws {
         StubAPI.reset(json: #"{"choices":[{"message":{"content":"Hi."}}]}"#)
 
-        _ = try await cleaner(.openAI, model: "gpt-4.1-mini").clean("hi")
+        _ = try await cleaner(.openAI, model: "gpt-4.1-mini").clean("hi", style: .other)
 
         #expect(StubAPI.requests[0].request.url?.absoluteString == "https://api.openai.com/v1/chat/completions")
         let json = try #require(try JSONSerialization.jsonObject(with: StubAPI.requests[0].body) as? [String: Any])
@@ -153,7 +153,7 @@ final class StubAPI: URLProtocol, @unchecked Sendable {
         // Some models (e.g. OpenAI's reasoning models) refuse a temperature; the defaults are known to take 0.
         StubAPI.reset(json: #"{"choices":[{"message":{"content":"Hi."}}]}"#)
 
-        _ = try await cleaner(.openAI, model: "o4-mini").clean("hi")
+        _ = try await cleaner(.openAI, model: "o4-mini").clean("hi", style: .other)
 
         let json = try #require(try JSONSerialization.jsonObject(with: StubAPI.requests[0].body) as? [String: Any])
         #expect(json["temperature"] == nil)
@@ -162,14 +162,14 @@ final class StubAPI: URLProtocol, @unchecked Sendable {
     @Test func cleanupWithoutAKeySendsNothing() async {
         StubAPI.reset(json: "{}")
 
-        await #expect(throws: CloudError.missingKey("Groq")) { try await cleaner(.groq, key: nil).clean("hi") }
+        await #expect(throws: CloudError.missingKey("Groq")) { try await cleaner(.groq, key: nil).clean("hi", style: .other) }
         #expect(StubAPI.requests.isEmpty)
     }
 
     @Test func aFailedCleanupSaysWhy() async {
         StubAPI.reset(status: 429, json: #"{"error":{"message":"Rate limit reached","type":"rate_limit"}}"#)
 
-        let error = await #expect(throws: CloudError.self) { try await cleaner(.openAI).clean("hi") }
+        let error = await #expect(throws: CloudError.self) { try await cleaner(.openAI).clean("hi", style: .other) }
 
         #expect(error?.localizedDescription == "OpenAI answered HTTP 429: Rate limit reached")
     }

@@ -65,13 +65,13 @@ public final class LLMCleaner: TextCleaner {
     public func prepare() async throws {
         _ = try await loadedContainer()
         if warming == nil {
-            warming = Task { _ = try? await self.clean("Okay.") }
+            warming = Task { _ = try? await self.clean("Okay.", style: .other) }
         }
         await warming?.value
     }
 
-    public func clean(_ text: String) async throws -> String {
-        try await respond(to: text, instructions: CleanupPrompt.instructions(vocabulary: vocabulary()),
+    public func clean(_ text: String, style: AppCategory) async throws -> String {
+        try await respond(to: text, instructions: CleanupPrompt.instructions(vocabulary: vocabulary(), style: style),
                           maxTokens: max(32, text.count / 2))
     }
 

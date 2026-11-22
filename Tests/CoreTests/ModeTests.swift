@@ -141,4 +141,28 @@ struct ModeTests {
 
         #expect(ModeStore(defaults: defaults).mode.releaseSound)
     }
+
+    @Test func everyAppStyleIsOnUntilSwitchedOff() {
+        let store = ModeStore(defaults: defaults)
+        #expect(store.mode.styles.chat && store.mode.styles.email && store.mode.styles.code)
+
+        store.mode.styles.email = false
+
+        let styles = ModeStore(defaults: defaults).mode.styles
+        #expect(!styles.email)
+        #expect(styles.chat && styles.code)
+    }
+
+    @Test func settingsSavedBeforeAppStylesExistedHaveThemAllOn() {
+        defaults.set(Data(#"{"version": 1, "language": "english", "cleanup": "off"}"#.utf8), forKey: ModeStore.key)
+
+        #expect(ModeStore(defaults: defaults).mode.styles == AppStyles())
+    }
+
+    @Test func anUnreadableStyleSwitchStaysOn() {
+        defaults.set(Data(#"{"version": 1, "styles": {"chat": "maybe", "email": false}}"#.utf8), forKey: ModeStore.key)
+
+        let styles = ModeStore(defaults: defaults).mode.styles
+        #expect(styles.chat && !styles.email && styles.code)
+    }
 }

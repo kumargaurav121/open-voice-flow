@@ -27,6 +27,9 @@ can't see these (v2 ticket 02: cuts mid-sentence).
 `expected_output`: exact (ignoring case and spacing), word errors against the expected text, and layout
 (lines, paragraph breaks, list numbers).
 
+**Styles per app** (v2 ticket 13, ADR 0017): `--app <bundle ID>` dictates as into that app, in its style; for example
+`--app com.apple.mail --cleanup thorough --ids 36` for an email (`--clean-text` takes it too). Without it, no style.
+
 **Commands** (ticket 11): `swift run -c release EvalRunner --name app-commands --model-folder <path> --commands`
 runs clips 24-28 through the command parser and writes `<name>.intents.json`; `uv run ovf-eval intents
 app-commands` scores them against `expected_parse` (strict: exact words; lenient: within 25% WER).

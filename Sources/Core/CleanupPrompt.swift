@@ -29,10 +29,31 @@ public enum CleanupPrompt {
         Output: I actually liked the new design, sorry for the late reply.
         """
 
-    /// The instructions, plus the dictionary's spellings when there are any.
-    public static func instructions(vocabulary: [String]) -> String {
-        guard !vocabulary.isEmpty else { return base }
-        return base + "\nNames and terms the speaker uses; spell them exactly like this: "
+    /// For an email (v2 ticket 13): its layout. Only the 4B and cloud models follow it; Qwen3-1.7B ignores it.
+    public static let email = """
+
+        This text is an email. Put the greeting ("Hi Mark,") on a line of its own. Split the body into short \
+        paragraphs with one blank line between them, starting a new paragraph where the topic changes. Put a \
+        sign-off ("Thanks,", "Best regards,") and the name after it on lines of their own. Never add a greeting \
+        or sign-off the speaker didn't say.
+
+        Example:
+        Input: Hi Priya, thanks for the quick reply. The contract looks good and we can sign it this week. One question though, can the start date move to January? Thanks, Kumar
+        Output: Hi Priya,
+
+        Thanks for the quick reply. The contract looks good and we can sign it this week.
+
+        One question though: can the start date move to January?
+
+        Thanks,
+        Kumar
+        """
+
+    /// The instructions for text going to an app of `style`, plus the dictionary's spellings when there are any.
+    public static func instructions(vocabulary: [String], style: AppCategory) -> String {
+        let instructions = style == .email ? base + email : base
+        guard !vocabulary.isEmpty else { return instructions }
+        return instructions + "\nNames and terms the speaker uses; spell them exactly like this: "
             + vocabulary.joined(separator: ", ") + ".\n"
     }
 }

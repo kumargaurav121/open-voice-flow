@@ -86,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     )
     private lazy var dictation = pipeline.dictation(
         selectedAI: { [weak self] in self?.activeCleaner },
-        isCodeContext: { CodeContext.isCodeEditor(bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") },
+        frontmostApp: { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
+        styles: { [weak self] in self?.modes.mode.styles ?? AppStyles() },
         log: { [weak self] in self?.log.notice($0) }
     )
     private lazy var session = PushToTalkSession(

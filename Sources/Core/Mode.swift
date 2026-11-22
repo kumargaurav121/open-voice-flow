@@ -99,6 +99,30 @@ public struct CloudLLM: Codable, Equatable, Sendable {
     }
 }
 
+/// Which categories of app get their own style (Settings → Formatting); each is on unless switched off.
+public struct AppStyles: Codable, Equatable, Sendable {
+    public var chat = true
+    public var email = true
+    public var code = true
+
+    public init() {}
+
+    /// The style for a dictation into the app with this bundle ID (nil: no app in front).
+    public func style(forApp bundleID: String?) -> AppCategory {
+        style(for: AppCategory(bundleID: bundleID))
+    }
+
+    /// The style for a dictation into an app of `category`: none (`.other`) when that style is switched off.
+    public func style(for category: AppCategory) -> AppCategory {
+        switch category {
+        case .chat: chat ? .chat : .other
+        case .email: email ? .email : .other
+        case .code: code ? .code : .other
+        case .other: .other
+        }
+    }
+}
+
 /// Everything about how dictation behaves, kept as one value so several named modes later is only a UI
 /// change. Versioned and decoded leniently: a field from a newer version, or a value this version doesn't
 /// know, falls back to its default instead of losing the rest.
@@ -123,11 +147,13 @@ public struct Mode: Codable, Equatable, Sendable {
 
     /// A soft sound the moment a dictation or command is released.
     public var releaseSound = true
+    /// Each category of app's style (chat, email, code).
+    public var styles = AppStyles()
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case version, language, cleanup, speech, cloudLLM, hotkeys, sendCountdown, releaseSound
+        case version, language, cleanup, speech, cloudLLM, hotkeys, sendCountdown, releaseSound, styles
     }
 
     public init(from decoder: Decoder) throws {
@@ -143,6 +169,7 @@ public struct Mode: Codable, Equatable, Sendable {
         let countdown = (try? container.decodeIfPresent(Int.self, forKey: .sendCountdown)) ?? nil
         sendCountdown = countdown.map(Self.clampedCountdown) ?? Self.defaultSendCountdown
         releaseSound = ((try? container.decodeIfPresent(Bool.self, forKey: .releaseSound)) ?? nil) ?? true
+        styles = (try? container.decodeIfPresent(LenientAppStyles.self, forKey: .styles))?.value ?? AppStyles()
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -155,6 +182,7 @@ public struct Mode: Codable, Equatable, Sendable {
         try container.encode(hotkeys, forKey: .hotkeys)
         try container.encode(sendCountdown, forKey: .sendCountdown)
         try container.encode(releaseSound, forKey: .releaseSound)
+        try container.encode(styles, forKey: .styles)
     }
 }
 
@@ -172,6 +200,20 @@ private struct LenientHotkeys: Decodable {
         value = decoded.conflict ? defaults : decoded
     }
     private enum CodingKeys: String, CodingKey { case dictate, command }
+}
+
+private struct LenientAppStyles: Decodable {
+    let value: AppStyles
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        func on(_ key: CodingKeys) -> Bool { ((try? container.decodeIfPresent(Bool.self, forKey: key)) ?? nil) ?? true }
+        var styles = AppStyles()
+        styles.chat = on(.chat)
+        styles.email = on(.email)
+        styles.code = on(.code)
+        value = styles
+    }
+    private enum CodingKeys: String, CodingKey { case chat, email, code }
 }
 
 private struct LenientCloudLLM: Decodable {

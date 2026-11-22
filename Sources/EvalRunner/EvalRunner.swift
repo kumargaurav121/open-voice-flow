@@ -22,6 +22,8 @@ import STT
 ///     or another, or v3 (`--stt parakeet-v3`, from another folder only) (v2 tickets 06-07)
 ///   GROQ_API_KEY=… swift run -c release EvalRunner --name oriserve-groq --model-folder <path> --cleanup cloud --llm groq
 /// Cloud keys come from the environment only (never arguments, which end up in shell history).
+///   swift run -c release EvalRunner --name t13-email --language english --stt parakeet-v2 --cleanup thorough --app com.apple.mail --ids 36
+///     dictated as into Mail, in the email style (v2 ticket 13); --clean-text takes --app too
 ///   swift run -c release EvalRunner --name app-commands --model-folder <path> --commands   # clips 24-28 as commands
 @main
 struct EvalRunner {
@@ -29,6 +31,9 @@ struct EvalRunner {
     static func main() async throws {
         let args = Arguments(CommandLine.arguments.dropFirst())
         LLMCleaner.configureGPU()
+        // --app <bundle ID>: dictate as into that app, in its style (com.apple.mail: email; v2 ticket 13). Default: none.
+        let app = args["--app"]
+        let style = AppStyles().style(forApp: app)
         // --clean-text "<text>": run one text through the rules and the AI cleanup, and stop.
         // --cleanup off|fast|thorough|cloud: the app's AI Cleanup menu (rules always run). Default off.
         // --llm openai|groq [--llm-model <name>]: the cloud LLM for --cleanup cloud.
@@ -44,10 +49,10 @@ struct EvalRunner {
             let rules = CleanupSpeechToText.rules(text, formatting: true)  // as dictation
             let clock = ContinuousClock()
             var ai = ""
-            let took = try await clock.measure { ai = try await cleaner.clean(rules) }
-            let accepted = CleanupSpeechToText.accepted(ai, over: rules)
+            let took = try await clock.measure { ai = try await cleaner.clean(rules, style: style) }
+            let accepted = CleanupSpeechToText.accepted(ai, over: rules, style: style)
             print("raw:   \(text)\nrules: \(rules)\nai:    \(ai)  (\(took), guard \(accepted != nil ? "accepts" : "rejects"))")
-            print("final: \(CleanupSpeechToText.layout(accepted ?? rules))")  // as pasted, AI cleanup on
+            print("final: \(CleanupSpeechToText.layout(accepted ?? rules, style: style))")  // as pasted, AI cleanup on
             return
         }
         let clips = URL(filePath: args["--clips"] ?? "docs/eval/clips", directoryHint: .isDirectory)
@@ -107,12 +112,12 @@ struct EvalRunner {
         } else {
             whisper
         }
-        // The app's own pipeline, so the transcripts are exactly what the app would paste (into a non-code app).
+        // The app's own pipeline, so the transcripts are exactly what the app would paste (into `--app`).
         // --sentence-pause <seconds>: see LiveTranscriber.sentencePause. Parakeet transcribes in long parts, as in the app.
         let pipeline = TranscriptPipeline(speech: speech, terms: { dictionary }, isEnglishWord: { EnglishWords.contains($0) },
                                           sentencePause: args["--sentence-pause"].flatMap(Double.init) ?? LiveTranscriber.sentencePause,
                                           partLengths: { _ in parakeet == nil ? .short : .long })
-        let transcriber = pipeline.dictation(selectedAI: { cleaner }, isCodeContext: { false },
+        let transcriber = pipeline.dictation(selectedAI: { cleaner }, frontmostApp: { app }, styles: { AppStyles() },
                                              log: { print("     cleanup: \($0)") })
         let commandTranscriber = pipeline.commands()
         let trimmer = SilenceTrimmer()

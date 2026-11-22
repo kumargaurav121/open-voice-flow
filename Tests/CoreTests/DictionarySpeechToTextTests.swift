@@ -38,7 +38,7 @@ struct DictionarySpeechToTextTests {
         ai.reply = { _ in "Message Gurjeet saying I'm late." }
         let pipeline = CleanupSpeechToText(
             wrapping: DictionarySpeechToText(wrapping: model, terms: { ["Gurjeet"] }),
-            selectedAI: { ai }, isCodeContext: { false }, formatting: false, timeout: .seconds(1), log: { _ in }
+            selectedAI: { ai }, style: { .other }, formatting: false, timeout: .seconds(1), emailTimeout: .seconds(1), log: { _ in }
         )
 
         let text = try await pipeline.transcribe(clip, language: .english)

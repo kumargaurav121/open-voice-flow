@@ -9,6 +9,8 @@ public struct TranscriptPipeline {
     /// How long AI cleanup gets before the rules output is used instead (Thorough took up to 2.4 s on long
     /// eval clips).
     public static let cleanupTimeout: Duration = .seconds(4)
+    /// An email's AI cleanup also lays it out: Thorough took 4.5 s on eval item 36 (about 100 words).
+    public static let emailCleanupTimeout: Duration = .seconds(8)
 
     /// Every transcription, one at a time; dictation feeds it live audio (`PushToTalkSession`'s `live`).
     public let live: LiveTranscriber
@@ -36,18 +38,20 @@ public struct TranscriptPipeline {
     }
 
     /// Dictation: the rules cleanup, spoken punctuation and line breaks, the AI cleanup the user switched on (nil
-    /// when off), then lists. Code editors and terminals get the raw transcript.
-    public func dictation(selectedAI: @escaping () -> TextCleaner?, isCodeContext: @escaping () -> Bool,
-                          log: @escaping (String) -> Void) -> CleanupSpeechToText {
-        CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI, isCodeContext: isCodeContext,
-                            formatting: true, timeout: Self.cleanupTimeout, log: log)
+    /// when off), lists, then the style of the app in front (`frontmostApp`, its bundle ID) unless switched off in
+    /// `styles`. Code editors and terminals get the raw transcript.
+    public func dictation(selectedAI: @escaping () -> TextCleaner?, frontmostApp: @escaping () -> String?,
+                          styles: @escaping () -> AppStyles, log: @escaping (String) -> Void) -> CleanupSpeechToText {
+        CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI,
+                            style: { styles().style(forApp: frontmostApp()) },
+                            formatting: true, timeout: Self.cleanupTimeout, emailTimeout: Self.emailCleanupTimeout, log: log)
     }
 
     /// Commands get the rules cleanup but never AI cleanup: it would add seconds, could reword the command
     /// itself, and would send it to the cloud when Cloud cleanup is on. Nor spoken punctuation: a line break
     /// would cut the message off (the parser reads one line).
     public func commands() -> SpeechToText {
-        CleanupSpeechToText(wrapping: transcription, selectedAI: { nil }, isCodeContext: { false },
-                            formatting: false, timeout: Self.cleanupTimeout, log: { _ in })
+        CleanupSpeechToText(wrapping: transcription, selectedAI: { nil }, style: { .other },
+                            formatting: false, timeout: Self.cleanupTimeout, emailTimeout: Self.cleanupTimeout, log: { _ in })
     }
 }

@@ -9,7 +9,8 @@ import Foundation
 /// ("four, actually no, let's make it"), when the kept fix after it replaces the mistake word for word and the
 /// rewrite adds no word at all (ADR 0015).
 /// Line breaks are the speaker's ("new line", "new paragraph"): the rewrite keeps exactly the same ones. Colons and
-/// list numbers opening a line ("1.", "2)") are layout, not words.
+/// list numbers opening a line ("1.", "2)") are layout, not words. An email's rewrite may add breaks (its greeting,
+/// paragraphs and sign-off, v2 ticket 13) but keeps every spoken one between the same words.
 /// Anything else (an answer, a translation, a dropped "mujhe lagta hai ki", "I like it" → "I it") is
 /// rejected and the rules-cleaned text is used instead.
 public enum AICleanupGuard {
@@ -37,11 +38,15 @@ public enum AICleanupGuard {
     /// milliseconds); longer dictations get no corrections.
     static let maxAlignment = 250_000
 
-    public static func accepts(original: String, rewritten: String) -> Bool {
+    /// - Parameter mayAddBreaks: the rewrite may add line breaks and blank lines (an email's layout).
+    public static func accepts(original: String, rewritten: String, mayAddBreaks: Bool = false) -> Bool {
         // List numbers are layout on both sides: never a word, nor standing in for a spoken one.
         let spoken = tokens(original).filter { !$0.isListNumber }
-        let cleaned = tokens(rewritten).filter { !$0.isListNumber }.map(\.word)
-        guard !cleaned.isEmpty, !spoken.isEmpty, breaks(original) == breaks(rewritten),
+        let rewrittenTokens = tokens(rewritten).filter { !$0.isListNumber }
+        let cleaned = rewrittenTokens.map(\.word)
+        let sameBreaks = breaks(original) == breaks(rewritten)
+        guard !cleaned.isEmpty, !spoken.isEmpty,
+              mayAddBreaks ? keepsSpokenBreaks(spoken: spoken, rewritten: rewrittenTokens) ?? sameBreaks : sameBreaks,
               !rewritten.unicodeScalars.contains(where: isIndicOrArabic)
         else { return false }
         if onlyTidied(spoken: spoken, cleaned: cleaned, maxNewWordShare: maxNewWordShare) { return true }
@@ -137,6 +142,12 @@ public enum AICleanupGuard {
             let reversed = keptIndices(spoken: spoken.reversed(), cleaned: cleaned.reversed(), latestCopies: true)
             return reversed.map { Set($0.map { spoken.count - 1 - $0 }) }
         }
+        return matches(spoken: spoken, cleaned: cleaned).map { Set($0.map(\.spoken)) }
+    }
+
+    /// Each kept spoken word and the rewritten word it is, in order, matched to its latest spoken copy. Nil for texts
+    /// too long to align.
+    private static func matches(spoken: [String], cleaned: [String]) -> [(spoken: Int, cleaned: Int)]? {
         let (n, m) = (spoken.count, cleaned.count)
         guard n * m <= maxAlignment else { return nil }
         // Longest common subsequence of the prefixes.
@@ -147,11 +158,11 @@ public enum AICleanupGuard {
             }
         }
         // Walking back from the ends matches each word to its latest copy.
-        var kept: Set<Int> = []
+        var matched: [(spoken: Int, cleaned: Int)] = []
         var (i, j) = (n, m)
         while i > 0, j > 0 {
             if spoken[i - 1] == cleaned[j - 1] {
-                kept.insert(i - 1)
+                matched.append((i - 1, j - 1))
                 (i, j) = (i - 1, j - 1)
             } else if table[i - 1][j] >= table[i][j - 1] {
                 i -= 1
@@ -159,10 +170,22 @@ public enum AICleanupGuard {
                 j -= 1
             }
         }
-        return kept
+        return matched.reversed()
     }
 
     // MARK: Layout
+
+    /// Every spoken break is still between the same kept words: a new line as a new line or a paragraph, a
+    /// paragraph as a paragraph. Breaks the rewrite adds don't matter. Nil for texts too long to align.
+    private static func keepsSpokenBreaks(spoken: [Token], rewritten: [Token]) -> Bool? {
+        guard let pairs = matches(spoken: spoken.map(\.word), cleaned: rewritten.map(\.word)) else { return nil }
+        return zip(pairs, pairs.dropFirst()).allSatisfy { previous, next in
+            let (said, saidNext) = (spoken[previous.spoken], spoken[next.spoken])
+            let (written, writtenNext) = (rewritten[previous.cleaned], rewritten[next.cleaned])
+            return (saidNext.line == said.line || writtenNext.line > written.line)
+                && (saidNext.paragraph == said.paragraph || writtenNext.paragraph > written.paragraph)
+        }
+    }
 
     /// The text's line breaks in order: 1 for a new line, 2 for a new paragraph (any blank lines).
     private static func breaks(_ text: String) -> [Int] {
@@ -232,14 +255,25 @@ public enum AICleanupGuard {
         var isListNumber = false
         /// Written with a capital: a name, or a sentence's first word.
         var capitalized = false
+        /// Which line and paragraph of the text it's on, counting from 0.
+        var line = 0
+        var paragraph = 0
     }
 
     private static func tokens(_ text: String) -> [Token] {
-        let lines = text.replacingOccurrences(of: "\u{2019}", with: "'").split(separator: "\n")
+        let lines = text.replacingOccurrences(of: "\u{2019}", with: "'").components(separatedBy: "\n")
         var result: [Token] = []
         var afterBoundary = true
+        var (lineNumber, paragraph, blankLine) = (-1, 0, false)
         for line in lines {
             let pieces = line.split(whereSeparator: \.isWhitespace)
+            guard !pieces.isEmpty else {
+                blankLine = true
+                continue
+            }
+            lineNumber += 1
+            if blankLine, lineNumber > 0 { paragraph += 1 }
+            blankLine = false
             for (position, piece) in pieces.enumerated() {
                 let written = piece.split { !$0.isLetter && !$0.isNumber && $0 != "'" }
                 let words = written.map { canonical($0.lowercased()) }
@@ -250,7 +284,8 @@ public enum AICleanupGuard {
                                         boundaryBefore: index == 0 && afterBoundary,
                                         boundaryAfter: index == words.count - 1 && endsWithBoundary,
                                         isListNumber: isListNumber,
-                                        capitalized: written[index].first?.isUppercase ?? false))
+                                        capitalized: written[index].first?.isUppercase ?? false,
+                                        line: lineNumber, paragraph: paragraph))
                 }
                 if !words.isEmpty { afterBoundary = endsWithBoundary }
             }

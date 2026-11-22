@@ -7,9 +7,12 @@ final class FakeCleaner: TextCleaner {
     var delay: Duration = .zero
     var error: Error?
     private(set) var inputs: [String] = []
+    /// The style each text was cleaned for.
+    private(set) var styles: [AppCategory] = []
 
-    func clean(_ text: String) async throws -> String {
+    func clean(_ text: String, style: AppCategory) async throws -> String {
         inputs.append(text)
+        styles.append(style)
         if delay > .zero { try await Task.sleep(for: delay) }
         if let error { throw error }
         return reply(text)
@@ -29,8 +32,8 @@ struct CleanupSpeechToTextTests {
         model.transcript = spoken
         var logged: [String] = []
         let selected: TextCleaner? = aiEnabled ? ai : nil, code = codeContext
-        let cleanup = CleanupSpeechToText(wrapping: model, selectedAI: { selected }, isCodeContext: { code },
-                                          formatting: false, timeout: timeout, log: { logged.append($0) })
+        let cleanup = CleanupSpeechToText(wrapping: model, selectedAI: { selected }, style: { code ? .code : .other },
+                                          formatting: false, timeout: timeout, emailTimeout: timeout, log: { logged.append($0) })
         let text = try await cleanup.transcribe(clip, language: .hinglish)
         return (text, logged)
     }
@@ -134,8 +137,8 @@ struct CleanupSelectionTests {
         model.transcript = "ship it today"
         let fast = FakeCleaner(), thorough = FakeCleaner()
         var choice: TextCleaner? = fast
-        let cleanup = CleanupSpeechToText(wrapping: model, selectedAI: { choice }, isCodeContext: { false },
-                                          formatting: false, timeout: .seconds(1), log: { _ in })
+        let cleanup = CleanupSpeechToText(wrapping: model, selectedAI: { choice }, style: { .other },
+                                          formatting: false, timeout: .seconds(1), emailTimeout: .seconds(1), log: { _ in })
         let clip = AudioClip(samples: [0.1], sampleRate: 16_000)
 
         _ = try await cleanup.transcribe(clip, language: .english)

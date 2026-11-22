@@ -80,4 +80,29 @@ struct AICleanupGuardTests {
     @Test func curlyApostrophesAreTheSameWord() {
         #expect(accepts("I don't know", "I don’t know."))
     }
+
+    // MARK: An email's layout (v2 ticket 13)
+
+    func acceptsInAnEmail(_ original: String, _ rewritten: String) -> Bool {
+        AICleanupGuard.accepts(original: original, rewritten: rewritten, mayAddBreaks: true)
+    }
+
+    @Test func anEmailMayGainParagraphsButNoOtherChange() {
+        let spoken = "Hi Mark, thanks for the call. Could you send me the names? Thanks, Kumar"
+        let laidOut = "Hi Mark,\n\nThanks for the call.\n\nCould you send me the names?\n\nThanks,\nKumar"
+
+        #expect(acceptsInAnEmail(spoken, laidOut))
+        #expect(!accepts(spoken, laidOut))  // anywhere else, only the breaks spoken
+        #expect(!acceptsInAnEmail(spoken, "Hi Mark,\n\nThanks for the call.\n\nCould you send me the names?\n\nBest,\nKumar"))
+    }
+
+    @Test func anEmailKeepsEveryBreakSpokenWhereItWas() {
+        let spoken = "Hi Mark,\nThanks for the call.\n\nSee you Friday."
+
+        #expect(acceptsInAnEmail(spoken, "Hi Mark,\n\nThanks for the call.\n\nSee you Friday."))  // a new line made a paragraph
+        #expect(!acceptsInAnEmail(spoken, "Hi Mark,\nThanks for the call. See you Friday."))
+        #expect(!acceptsInAnEmail(spoken, "Hi Mark,\nThanks for the call.\nSee you Friday."))  // a paragraph made a line
+        #expect(!acceptsInAnEmail(spoken, "Hi Mark, thanks for the call.\n\nSee you Friday."))
+        #expect(!acceptsInAnEmail(spoken, "Hi Mark,\nThanks for the\n\ncall. See you Friday."))  // moved
+    }
 }

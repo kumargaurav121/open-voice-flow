@@ -3,8 +3,8 @@ import Cloud
 import Core
 import SwiftUI
 
-/// Menu bar → Settings… (⌘,): hotkeys, language and AI cleanup; speech and AI providers with the user's
-/// own keys; the dictionary; privacy. Everything except the keys is one `Mode` value.
+/// Menu bar → Settings… (⌘,): hotkeys, language and AI cleanup; each kind of app's style; speech and AI providers
+/// with the user's own keys; the dictionary; privacy. Everything except the keys is one `Mode` value.
 @MainActor
 final class SettingsWindow {
     private let modes: ModeStore
@@ -56,6 +56,8 @@ private struct SettingsView: View {
             // `keys` is read inside so saving a key in Providers updates the AI Cleanup choices.
             GeneralTab(modes: modes, keys: keys, cleanupAvailable: cleanupAvailable)
                 .tabItem { Label("General", systemImage: "gearshape") }
+            FormattingTab(modes: modes)
+                .tabItem { Label("Formatting", systemImage: "text.alignleft") }
             ProvidersTab(modes: modes, keys: keys)
                 .tabItem { Label("Providers", systemImage: "cloud") }
             DictionaryView(store: dictionary)
@@ -150,6 +152,41 @@ private struct GeneralTab: View {
             hotkeys[keyPath: path] = key
             conflict = hotkeys.conflict
             if !hotkeys.conflict { modes.mode.hotkeys = hotkeys }
+        }
+    }
+}
+
+// MARK: Formatting
+
+/// Each kind of app's style (v2 ticket 13), each on unless switched off.
+private struct FormattingTab: View {
+    @Bindable var modes: ModeStore
+
+    var body: some View {
+        Form {
+            Section {
+                style("Chat: casual", isOn: $modes.mode.styles.chat,
+                      "Slack, Teams, Messages, WhatsApp, Discord and Telegram: a message of one or two sentences has no full stop at the end.")
+                style("Email: laid out", isOn: $modes.mode.styles.email,
+                      "Mail and Outlook: the greeting and sign-off go on lines of their own. With AI Cleanup on Thorough or Cloud, the body is split into paragraphs.")
+                style("Code: exactly as spoken", isOn: $modes.mode.styles.code,
+                      "Code editors and terminals get exactly what you said, with no cleanup or formatting. Off: formatted like any other app.")
+            } header: {
+                Text("Styles by App")
+            } footer: {
+                Text("Other apps get spoken punctuation, line breaks and lists, with no style of their own.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func style(_ title: String, isOn: Binding<Bool>, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(title, isOn: isOn)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

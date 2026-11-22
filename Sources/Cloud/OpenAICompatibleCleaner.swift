@@ -45,7 +45,7 @@ public final class OpenAICompatibleCleaner: TextCleaner {
         self.session = session
     }
 
-    public func clean(_ text: String) async throws -> String {
+    public func clean(_ text: String, style: AppCategory) async throws -> String {
         let llm = llm()
         let service = llm.service
         guard let key = try apiKey(service) else { throw CloudError.missingKey(service.displayName) }
@@ -59,7 +59,7 @@ public final class OpenAICompatibleCleaner: TextCleaner {
             // Deterministic with the default models; a model the user named might refuse a temperature.
             temperature: model == service.defaultModel ? 0 : nil,
             messages: [
-                .init(role: "system", content: CleanupPrompt.instructions(vocabulary: vocabulary())),
+                .init(role: "system", content: CleanupPrompt.instructions(vocabulary: vocabulary(), style: style)),
                 .init(role: "user", content: text),
             ]
         ))

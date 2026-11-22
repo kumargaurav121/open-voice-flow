@@ -12,13 +12,16 @@ struct TranscriptPipelineTests {
     let clock = FakeClock()
     let commandModel = FakeCommandModel(reply: #"{"action":"unknown"}"#)
     var aiEnabled = false
-    var codeContext = false
+    /// The bundle ID of the app in front, where the text goes.
+    var frontmostApp: String?
+    var styles = AppStyles()
 
     /// A session built as the app builds it, around the fake model, AI and inserter.
     func makeSession() -> PushToTalkSession {
-        let selected: TextCleaner? = aiEnabled ? ai : nil, codeContext = codeContext
+        let selected: TextCleaner? = aiEnabled ? ai : nil, app = frontmostApp, styles = styles
         let pipeline = TranscriptPipeline(speech: model, terms: { ["Gurjeet"] }, isEnglishWord: { _ in false })
-        let dictation = pipeline.dictation(selectedAI: { selected }, isCodeContext: { codeContext }, log: { _ in })
+        let dictation = pipeline.dictation(selectedAI: { selected }, frontmostApp: { app }, styles: { styles },
+                                           log: { _ in })
         return PushToTalkSession(
             recorder: recorder,
             speechToText: dictation,
@@ -74,7 +77,7 @@ struct TranscriptPipelineTests {
     }
 
     @Test mutating func codeEditorsGetTheRawTranscriptWithoutCleanup() async {
-        codeContext = true
+        frontmostApp = "com.microsoft.VSCode"
         aiEnabled = true
 
         #expect(await press(hearing: "um git commit dash m fix").pasted == "um git commit dash m fix")
@@ -478,7 +481,7 @@ struct TranscriptPipelineTests {
         #expect(!session.canUndoFormatting)
         #expect(await undo(on: session).isEmpty)
 
-        codeContext = true
+        frontmostApp = "com.apple.Terminal"
         session = makeSession()
         _ = await press(hearing: "git commit dash m fix comma typo", on: session)  // code editors get it raw
         #expect(!session.canUndoFormatting)
@@ -514,5 +517,205 @@ struct TranscriptPipelineTests {
         await session.undoFormatting()
 
         #expect(inserter.replacements == [.init(old: "Let's meet at five.", new: "Let's meet at four, actually no, let's make it five.")])
+    }
+
+    // MARK: Styles per app (v2 ticket 13)
+
+    /// The chat apps' bundle IDs: Slack, Teams (new and classic), Messages, WhatsApp, Discord, Telegram (the
+    /// App Store app and Telegram Desktop).
+    nonisolated static let chatApps = ["com.tinyspeck.slackmacgap", "com.microsoft.teams2", "com.microsoft.teams", "com.apple.MobileSMS",
+                           "net.whatsapp.WhatsApp", "com.hnc.Discord", "ru.keepcoder.Telegram", "com.tdesktop.Telegram"]
+
+    @Test(arguments: chatApps)
+    mutating func chatAppsGetTheCasualStyle(_ app: String) async {
+        frontmostApp = app
+
+        #expect(await press(hearing: "See you at five.").pasted == "See you at five")
+    }
+
+    @Test(arguments: ["com.apple.TextEdit", nil])
+    mutating func otherAppsHaveNoStyle(_ app: String?) async {
+        frontmostApp = app
+
+        #expect(await press(hearing: "See you at five.").pasted == "See you at five.")
+    }
+
+    @Test mutating func aChatMessageOfOneOrTwoSentencesLosesOnlyItsFinalFullStop() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+
+        #expect(await press(hearing: "Running late. Start without me.").pasted == "Running late. Start without me")
+        #expect(await press(hearing: "Hi Rohan comma new line thanks for the update full stop").pasted
+                == "Hi Rohan,\nThanks for the update")
+        #expect(await press(hearing: "Are you free at five?").pasted == "Are you free at five?")
+        #expect(await press(hearing: "We shipped it. Great work!").pasted == "We shipped it. Great work!")
+    }
+
+    @Test mutating func aLongerChatMessageKeepsItsFullStops() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+
+        #expect(await press(hearing: "The build is green. QA signed off. Let's ship it.").pasted
+                == "The build is green. QA signed off. Let's ship it.")
+        // A list's items keep their full stops, like the rest of its items.
+        #expect(await press(hearing: "Two updates. One, the login bug is fixed. Two, the notes are ready.").pasted
+                == "Two updates:\n1. The login bug is fixed.\n2. The notes are ready.")
+    }
+
+    @Test mutating func aChatMessageEndingInAnEllipsisOrAnAbbreviationKeepsIt() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+
+        #expect(await press(hearing: "Let me think...").pasted == "Let me think...")
+        #expect(await press(hearing: "See you at 5 p.m.").pasted == "See you at 5 p.m.")
+    }
+
+    @Test mutating func aChatMessageCountsSentencesNotFullStops() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+
+        #expect(await press(hearing: "Ask Mr. Sharma. He knows.").pasted == "Ask Mr. Sharma. He knows")
+        #expect(await press(hearing: "Update to version 2.5.").pasted == "Update to version 2.5")
+        #expect(await press(hearing: "It's on example.com.").pasted == "It's on example.com")
+    }
+
+    @Test(arguments: ["com.apple.mail", "com.microsoft.Outlook"])
+    mutating func emailAppsPutTheGreetingOnALineOfItsOwn(_ app: String) async {
+        frontmostApp = app
+
+        // Eval item 36's opening, as both English models wrote it.
+        #expect(await press(hearing: "Hi Mark, thanks for your time on the call yesterday. See you on Monday.").pasted
+                == "Hi Mark,\n\nThanks for your time on the call yesterday. See you on Monday.")
+    }
+
+    @Test mutating func anEmailMayOpenWithAnyUsualGreeting() async {
+        frontmostApp = "com.apple.mail"
+
+        #expect(await press(hearing: "Hello everyone, here's a quick summary.").pasted == "Hello everyone,\n\nHere's a quick summary.")
+        #expect(await press(hearing: "Good morning team, the build is ready.").pasted == "Good morning team,\n\nThe build is ready.")
+        #expect(await press(hearing: "Dear Mr. Sharma, please find the report attached.").pasted
+                == "Dear Mr. Sharma,\n\nPlease find the report attached.")
+        #expect(await press(hearing: "Hey Mark and Priya, quick question about Friday.").pasted
+                == "Hey Mark and Priya,\n\nQuick question about Friday.")
+        #expect(await press(hearing: "Hi, are you free tomorrow?").pasted == "Hi,\n\nAre you free tomorrow?")
+    }
+
+    @Test mutating func onlyAGreetingOpeningTheEmailGoesOnItsOwnLine() async {
+        frontmostApp = "com.apple.mail"
+
+        #expect(await press(hearing: "High time we shipped it, said Mark.").pasted == "High time we shipped it, said Mark.")
+        #expect(await press(hearing: "I said hi Mark, then left.").pasted == "I said hi Mark, then left.")
+        #expect(await press(hearing: "Hi there is a problem with the build, can you check?").pasted
+                == "Hi there is a problem with the build, can you check?")
+        // Only the greeting: a capital after its comma starts the text.
+        #expect(await press(hearing: "Hi Mark, I, for one, agree.").pasted == "Hi Mark,\n\nI, for one, agree.")
+        #expect(await press(hearing: "Hi Mark, Friday, after lunch, works.").pasted == "Hi Mark,\n\nFriday, after lunch, works.")
+        // A break the speaker gave it stays as said.
+        #expect(await press(hearing: "Hi Rohan comma new line thanks").pasted == "Hi Rohan,\nThanks")
+    }
+
+    @Test mutating func anEmailsSignOffGoesOnLinesOfItsOwn() async {
+        frontmostApp = "com.apple.mail"
+
+        #expect(await press(hearing: "Hi team, quick update on the launch. The build is ready. Thanks, Kumar").pasted
+                == "Hi team,\n\nQuick update on the launch. The build is ready.\n\nThanks,\nKumar")
+        #expect(await press(hearing: "The report is attached. Best regards, Kumar Gaurav.").pasted
+                == "The report is attached.\n\nBest regards,\nKumar Gaurav")
+        #expect(await press(hearing: "See you on Monday. Cheers!").pasted == "See you on Monday.\n\nCheers!")
+        #expect(await press(hearing: "See you on Monday. Best Regards").pasted == "See you on Monday.\n\nBest Regards")
+    }
+
+    @Test mutating func thankingTheReaderIsNotASignature() async {
+        frontmostApp = "com.apple.mail"
+
+        // The name the email greets is the reader's: it stays with the thanks.
+        #expect(await press(hearing: "Hi Priya, the deck is ready. Thanks, Priya!").pasted
+                == "Hi Priya,\n\nThe deck is ready.\n\nThanks, Priya!")
+        #expect(await press(hearing: "The deck is ready. Thank you for your help.").pasted
+                == "The deck is ready. Thank you for your help.")
+        #expect(await press(hearing: "Thanks, Kumar").pasted == "Thanks, Kumar")  // nothing to sign off
+        // Also with the greeting already on a line of its own.
+        #expect(await press(hearing: "Hi Priya comma new line the deck is ready. Thanks, Priya!").pasted
+                == "Hi Priya,\nThe deck is ready.\n\nThanks, Priya!")
+    }
+
+    @Test mutating func theAIsLayoutKeepsThanksToTheReaderTogether() async {
+        frontmostApp = "com.apple.mail"
+        aiEnabled = true
+        ai.reply = { _ in "Hi Priya,\n\nThe deck is ready.\n\nThanks, Priya!" }
+
+        #expect(await press(hearing: "Hi Priya, the deck is ready. Thanks, Priya!").pasted
+                == "Hi Priya,\n\nThe deck is ready.\n\nThanks, Priya!")
+    }
+
+    @Test mutating func anEmailsAICleanupMayLayItOutInParagraphs() async {
+        frontmostApp = "com.apple.mail"
+        aiEnabled = true
+        // As the 4B model laid out eval item 36's kind of email when asked for paragraphs.
+        ai.reply = { _ in "Hi Mark,\n\nThanks for the call. The pilot starts Monday.\n\nCould you send me the names?\n\nThanks,\nKumar" }
+
+        let pasted = await press(hearing: "Hi Mark, thanks for the call. The pilot starts Monday. Could you send me the names? Thanks, Kumar").pasted
+
+        #expect(ai.styles == [.email])
+        #expect(pasted == "Hi Mark,\n\nThanks for the call. The pilot starts Monday.\n\nCould you send me the names?\n\nThanks,\nKumar")
+    }
+
+    @Test mutating func anEmailsAICleanupMustKeepTheBreaksSpoken() async {
+        frontmostApp = "com.apple.mail"
+        aiEnabled = true
+        ai.reply = { _ in "Hi Mark,\n\nThanks for the call. See you Friday." }  // the spoken new paragraph is gone
+
+        let pasted = await press(hearing: "Hi Mark comma new line thanks for the call full stop new paragraph see you Friday").pasted
+
+        #expect(pasted == "Hi Mark,\nThanks for the call.\n\nSee you Friday")
+    }
+
+    @Test mutating func elsewhereTheAICleanupStillMayNotAddBreaks() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+        aiEnabled = true
+        ai.reply = { _ in "Thanks for the call.\n\nSee you Friday." }
+
+        let pasted = await press(hearing: "Thanks for the call. See you Friday.").pasted
+
+        #expect(ai.styles == [.chat])
+        #expect(pasted == "Thanks for the call. See you Friday")
+    }
+
+    @Test mutating func aStyleSwitchedOffLeavesItsAppsUnstyled() async {
+        styles.chat = false
+        frontmostApp = "com.tinyspeck.slackmacgap"
+        #expect(await press(hearing: "See you at five.").pasted == "See you at five.")
+
+        styles.email = false
+        frontmostApp = "com.apple.mail"
+        #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted == "Hi Mark, thanks for the call. Thanks, Kumar")
+    }
+
+    @Test mutating func withTheCodeStyleOffCodeEditorsAndTerminalsGetFormattedText() async {
+        styles.code = false
+        frontmostApp = "com.googlecode.iterm2"
+
+        #expect(await press(hearing: "um fix the login bug comma then run the tests").pasted == "Fix the login bug, then run the tests")
+    }
+
+    @Test(arguments: ["com.microsoft.VSCode", "com.apple.Terminal", "com.jetbrains.intellij"])
+    mutating func codeEditorsAndTerminalsGetExactlyWhatWasSaid(_ app: String) async {
+        frontmostApp = app
+
+        #expect(await press(hearing: "um git commit dash m fix comma typo").pasted == "um git commit dash m fix comma typo")
+    }
+
+    @Test mutating func aChatMessagesFullStopComesBackWithUndoFormatting() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+        let session = makeSession()
+        _ = await press(hearing: "See you at five.", on: session)
+
+        #expect(session.canUndoFormatting)
+        await session.undoFormatting()
+        #expect(inserter.replacements == [.init(old: "See you at five", new: "See you at five.")])
+    }
+
+    @Test mutating func commandsInAChatAppAreNotStyled() async {
+        frontmostApp = "com.tinyspeck.slackmacgap"
+
+        let events = await press(.command, hearing: "message gurujit saying see you at five.").events
+
+        #expect(events.last == .commandParsed(.sendMessage(app: "slack", to: "Gurjeet", text: "See you at five.")))
     }
 }
