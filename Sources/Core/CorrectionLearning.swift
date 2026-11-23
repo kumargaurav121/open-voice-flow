@@ -30,14 +30,17 @@ public struct CorrectionLearning {
     /// How long the field is watched after a paste (SPEC: 30 s), and how often it's read.
     public var window: TimeInterval
     public var interval: TimeInterval
+    /// How each watch went, as counts and reasons only: never a word or the field's text.
+    public var log: (String) -> Void
 
     public init(field: PastedField, isOn: @escaping () -> Bool, learn: @escaping ([WordFix]) -> [String],
-                window: TimeInterval = 30, interval: TimeInterval = 0.5) {
+                window: TimeInterval = 30, interval: TimeInterval = 0.5, log: @escaping (String) -> Void = { _ in }) {
         self.field = field
         self.isOn = isOn
         self.learn = learn
         self.window = window
         self.interval = interval
+        self.log = log
     }
 }
 
@@ -49,30 +52,38 @@ enum CorrectionWatch {
     /// The fixes the field showed for `pasted`, read until `window` ends, focus leaves the field, or the task is
     /// cancelled (a new dictation). A fix counts only once two reads in a row show it, so a word half typed doesn't.
     @MainActor
-    static func watch(_ pasted: String, in field: PastedField, window: TimeInterval,
-                      interval: TimeInterval) async -> [WordFix] {
-        guard let paste = await landed(pasted, in: field, interval: interval) else { return [] }
+    static func watch(_ pasted: String, in field: PastedField, window: TimeInterval, interval: TimeInterval,
+                      log: (String) -> Void = { _ in }) async -> [WordFix] {
+        guard let paste = await landed(pasted, in: field, interval: interval, log: log) else { return [] }
         let deadline = ContinuousClock.now + .seconds(window)
         var last: [WordFix]?
         var settled: [WordFix] = []
+        var ending = "time up"
         while ContinuousClock.now < deadline {
             try? await Task.sleep(for: .seconds(interval))
-            guard !Task.isCancelled, let now = await field.read() else { break }
+            if Task.isCancelled { ending = "a new dictation or Undo Formatting"; break }
+            guard let now = await field.read() else { ending = "focus left the field"; break }
             let fixes = paste.fixes(in: now.text)
             if let fixes, fixes == last { settled = fixes }
             last = fixes
         }
+        log("Learning: watch ended (\(ending)); one-word fixes: \(settled.count)")
         return settled
     }
 
     /// Where the paste landed in the field, read until it shows (`pasteLanding`); nil if it never does there.
     @MainActor
-    private static func landed(_ pasted: String, in field: PastedField, interval: TimeInterval) async -> Paste? {
+    private static func landed(_ pasted: String, in field: PastedField, interval: TimeInterval,
+                               log: (String) -> Void) async -> Paste? {
         var text = await field.follow()
+        if text == nil { log("Learning: the field can't be read; not watched") }
         let deadline = ContinuousClock.now + .seconds(pasteLanding)
         while let current = text {
             if let paste = Paste(pasted, in: current) { return paste }
-            guard ContinuousClock.now < deadline, !Task.isCancelled else { return nil }
+            guard ContinuousClock.now < deadline, !Task.isCancelled else {
+                log("Learning: the paste isn't just before the cursor; not watched")
+                return nil
+            }
             try? await Task.sleep(for: .seconds(min(interval, 0.1)))
             text = await field.read()
         }

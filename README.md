@@ -77,7 +77,8 @@ on the clipboard.
 - No analytics. Besides model downloads, the app only contacts the cloud providers you choose
   (Deepgram, OpenAI, Groq); their keys are stored in the macOS Keychain.
 - After a dictation is pasted, the app re-reads that field for up to 30 seconds to learn your one-word fixes. Only
-  the two words of each fix are kept, for 7 days, on this Mac. Turn it off in **Settings → Privacy**.
+  the two words of each fix are kept, for 7 days, on this Mac, plus the words it offers and the ones you turn
+  down. Turn it off in **Settings → Privacy**.
 - With the email style on, the app asks your browser for its front tab's address when you dictate into it, to
   tell Gmail and Outlook on the web apart from other pages. macOS asks your permission once per browser. The
   address is never stored, logged or sent.

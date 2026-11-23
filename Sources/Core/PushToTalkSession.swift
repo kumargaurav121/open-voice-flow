@@ -236,7 +236,7 @@ public final class PushToTalkSession {
     private func startWatching(_ pasted: String, with learning: CorrectionLearning) {
         correctionWatch = Task { [weak self] in
             let fixes = await CorrectionWatch.watch(pasted, in: learning.field, window: learning.window,
-                                                    interval: learning.interval)
+                                                    interval: learning.interval, log: learning.log)
             // Still on: the switch may have been turned off while the field was watched.
             guard !fixes.isEmpty, learning.isOn() else { return }
             for word in learning.learn(fixes) { self?.onEvent(.suggested(word)) }

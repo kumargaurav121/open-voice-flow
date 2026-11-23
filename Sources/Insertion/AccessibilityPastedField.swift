@@ -29,12 +29,14 @@ public final class AccessibilityPastedField: PastedField {
     private static func text(of element: AXUIElement) -> FieldText? {
         var subrole: CFTypeRef?, count: CFTypeRef?, value: CFTypeRef?, selection: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subrole)
-        guard subrole as? String != kAXSecureTextFieldSubrole as String,
-              // Its length first, so a long text isn't copied over just to be refused.
-              AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
-              let length = count as? Int, length <= maxLength,
-              AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
-              let text = value as? String,
+        guard subrole as? String != kAXSecureTextFieldSubrole as String else { return nil }
+        // Its length first where the field gives it, so a long text isn't copied over just to be refused.
+        if AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
+           let length = count as? Int, length > maxLength {
+            return nil
+        }
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
+              let text = value as? String, text.utf16.count <= maxLength,
               AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selection) == .success,
               let selection, CFGetTypeID(selection) == AXValueGetTypeID()
         else { return nil }

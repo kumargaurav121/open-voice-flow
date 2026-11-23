@@ -118,7 +118,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return false }
                 return modes.mode.learnsFromCorrections && !dictation.lastWasSnippet
             },
-            learn: { [weak self] in self?.dictionary.learn($0) ?? [] }
+            learn: { [weak self] in self?.dictionary.learn($0) ?? [] },
+            log: { [weak self] in self?.log.notice($0) }
         )
     )
     /// When the command key was released, for the "parsed in under 2 s" target.

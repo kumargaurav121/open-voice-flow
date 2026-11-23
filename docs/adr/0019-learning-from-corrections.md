@@ -40,7 +40,8 @@ Status: Accepted · 2026-11-23 (v2 ticket 15)
   notch is free, after that dictation's ✓; several show in turn. The menu bar menu lists each suggestion with
   **Add “…” to Dictionary** and **Don't Suggest “…”** until one is chosen.
 - **On by default**, with a switch in Settings → Privacy (the user's choice, as the SPEC said).
-- **The log** says a word was learned, never the word or the field's text.
+- **The log** says how each watch went (the field unreadable, the paste not found, or how it ended and how many
+  one-word fixes it saw) and when a word was learned: never the word or the field's text.
 
 ## Consequences
 - **Only where the field can be read.** A paste in Slack with line breaks or a list doesn't end at the cursor as
