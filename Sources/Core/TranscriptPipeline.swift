@@ -40,23 +40,26 @@ public struct TranscriptPipeline {
     /// Dictation: the rules cleanup, spoken punctuation and line breaks, the AI cleanup the user switched on (nil
     /// when off), lists, then the style of the app in front (`frontmostApp`, its bundle ID; in a browser, the page
     /// its front tab's address names, `frontTabAddress`, or else its window's title, `frontWindowTitle`) unless
-    /// switched off in `styles`. Code editors and terminals get the raw transcript.
+    /// switched off in `styles`. Code editors and terminals get the raw transcript. A cue of the user's `snippets`
+    /// said as the whole dictation pastes that snippet instead, as saved, in any app (v2 ticket 14).
     public func dictation(selectedAI: @escaping () -> TextCleaner?, frontmostApp: @escaping () -> String?,
                           frontTabAddress: @escaping () -> String?, frontWindowTitle: @escaping () -> String?,
-                          styles: @escaping () -> AppStyles, log: @escaping (String) -> Void) -> CleanupSpeechToText {
+                          styles: @escaping () -> AppStyles, snippets: @escaping () -> [Snippet],
+                          log: @escaping (String) -> Void) -> CleanupSpeechToText {
         CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI,
                             style: {
                                 styles().style(forApp: frontmostApp(), tabAddress: frontTabAddress,
                                                windowTitle: frontWindowTitle, log: log)
                             },
+                            snippets: snippets,
                             formatting: true, timeout: Self.cleanupTimeout, emailTimeout: Self.emailCleanupTimeout, log: log)
     }
 
     /// Commands get the rules cleanup but never AI cleanup: it would add seconds, could reword the command
     /// itself, and would send it to the cloud when Cloud cleanup is on. Nor spoken punctuation: a line break
-    /// would cut the message off (the parser reads one line).
+    /// would cut the message off (the parser reads one line). Nor snippets: a command is never a snippet's cue.
     public func commands() -> SpeechToText {
-        CleanupSpeechToText(wrapping: transcription, selectedAI: { nil }, style: { .other },
+        CleanupSpeechToText(wrapping: transcription, selectedAI: { nil }, style: { .other }, snippets: { [] },
                             formatting: false, timeout: Self.cleanupTimeout, emailTimeout: Self.cleanupTimeout, log: { _ in })
     }
 }

@@ -19,6 +19,8 @@ struct TranscriptPipelineTests {
     /// The address of a browser's front tab (nil: the browser didn't give it).
     var frontTabAddress: String?
     var styles = AppStyles()
+    var snippets: [Snippet] = []
+    var language = Language.hinglish
     /// Every line the pipeline logged.
     let logged = Lines()
     /// What the pipeline read about a browser's page, in order: "address", "title".
@@ -27,16 +29,17 @@ struct TranscriptPipelineTests {
     /// A session built as the app builds it, around the fake model, AI and inserter.
     func makeSession() -> PushToTalkSession {
         let selected: TextCleaner? = aiEnabled ? ai : nil, app = frontmostApp, address = frontTabAddress,
-            title = frontWindowTitle, styles = styles
+            title = frontWindowTitle, styles = styles, snippets = snippets, language = language
         let pipeline = TranscriptPipeline(speech: model, terms: { ["Gurjeet"] }, isEnglishWord: { _ in false })
         let dictation = pipeline.dictation(selectedAI: { selected }, frontmostApp: { app },
                                            frontTabAddress: { [pageReads] in pageReads.lines.append("address"); return address },
                                            frontWindowTitle: { [pageReads] in pageReads.lines.append("title"); return title },
-                                           styles: { styles }, log: { [logged] in logged.lines.append($0) })
+                                           styles: { styles }, snippets: { snippets },
+                                           log: { [logged] in logged.lines.append($0) })
         return PushToTalkSession(
             recorder: recorder,
             speechToText: dictation,
-            inserter: inserter, now: clock.now, language: { .hinglish },
+            inserter: inserter, now: clock.now, language: { language },
             commands: CommandParser(model: { [commandModel] in commandModel }),
             commandSpeechToText: pipeline.commands(),
             live: pipeline.live,
@@ -856,6 +859,98 @@ struct TranscriptPipelineTests {
         let events = await press(.command, hearing: "message gurujit saying see you at five.").events
 
         #expect(events.last == .commandParsed(.sendMessage(app: "slack", to: "Gurjeet", text: "See you at five.")))
+    }
+}
+
+extension TranscriptPipelineTests {
+    // MARK: Snippets (v2 ticket 14)
+
+    @Test mutating func sayingACuePastesItsSnippetExactlyAsSaved() async {
+        snippets = [Snippet(cue: "my reply", text: "Thanks for reaching out. I'll reply within a day."),
+                    Snippet(cue: "my email", text: "kumar@example.com")]
+        aiEnabled = true
+        frontmostApp = "com.tinyspeck.slackmacgap"  // whose style would drop a short message's full stop
+
+        #expect(await press(hearing: "My reply.").pasted == "Thanks for reaching out. I'll reply within a day.")
+        #expect(await press(hearing: "My email.").pasted == "kumar@example.com")  // no capital added
+        #expect(ai.styles.isEmpty)  // nor any AI cleanup
+    }
+
+    /// The user's choice (2026-11-23): fillers are skipped too, and a cue's digits match the words said.
+    @Test mutating func aCueMatchesWhateverTheCasePunctuationAndFillers() async {
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com"),
+                    Snippet(cue: "my address", text: "Kumar Gaurav\n42, MG Road\nBengaluru 560001"),
+                    Snippet(cue: "zoom link 2", text: "https://zoom.us/j/2"),
+                    Snippet(cue: "call 9", text: "Call me at 9."), Snippet(cue: "call 911", text: "Emergency: 911"),
+                    Snippet(cue: "room 15", text: "Room 15, 2nd floor"),
+                    Snippet(cue: "what's my number", text: "+91 98765 43210")]
+
+        #expect(await press(hearing: "Um, MY EMAIL!").pasted == "kumar@example.com")
+        #expect(await press(hearing: "Um, my address.").pasted == "Kumar Gaurav\n42, MG Road\nBengaluru 560001")
+        #expect(await press(hearing: "Zoom link two.").pasted == "https://zoom.us/j/2")
+        #expect(await press(hearing: "Call nine.").pasted == "Call me at 9.")
+        #expect(await press(hearing: "Call nine one one.").pasted == "Emergency: 911")
+        #expect(await press(hearing: "Room fifteen.").pasted == "Room 15, 2nd floor")
+        #expect(await press(hearing: "Whats my number?").pasted == "+91 98765 43210")
+    }
+
+    @Test mutating func aCueInsideALongerDictationIsJustWords() async {
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com"), Snippet(cue: "uh oh", text: "Something broke.")]
+
+        #expect(await press(hearing: "Send them my email.").pasted == "Send them my email.")
+        #expect(await press(hearing: "My email is below.").pasted == "My email is below.")
+        #expect(await press(hearing: "Oh.").pasted == "Oh.")  // a cue's own words count, fillers and all
+        #expect(await press(hearing: "Uh oh.").pasted == "Something broke.")
+    }
+
+    @Test mutating func commandsNeverMatchSnippets() async {
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com")]
+
+        let events = await press(.command, hearing: "my email").events
+
+        #expect(events.last == .commandUnknown(transcript: "My email"))
+        #expect(inserter.inserted.isEmpty)
+    }
+
+    @Test mutating func snippetsWorkInBothLanguages() async {
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com"), Snippet(cue: "mera pata", text: "42, MG Road")]
+
+        language = .english
+        #expect(await press(hearing: "My email.").pasted == "kumar@example.com")
+        language = .hinglish
+        #expect(await press(hearing: "Mera pata.").pasted == "42, MG Road")
+        // Devanagari from the Hinglish model reaches the match in English letters.
+        #expect(await press(hearing: "मेरा पता").pasted == "42, MG Road")
+    }
+
+    /// The user's choice (2026-11-23): code editors and terminals, which otherwise get exactly what was said.
+    @Test mutating func aCuePastesItsSnippetInCodeEditorsToo() async {
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com")]
+        frontmostApp = "com.apple.Terminal"
+
+        #expect(await press(hearing: "my email").pasted == "kumar@example.com")
+    }
+
+    /// The user's choice (2026-11-23): a cue said by accident costs one keystroke.
+    @Test mutating func undoFormattingPutsBackTheCueThatWasSaid() async {
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com")]
+        let session = makeSession()
+        _ = await press(hearing: "my email.", on: session)
+
+        #expect(session.canUndoFormatting)
+        await session.undoFormatting()
+        #expect(inserter.replacements == [.init(old: "kumar@example.com", new: "My email.")])
+    }
+
+    /// A terminal gets the words exactly as said, as for any dictation there.
+    @Test mutating func undoFormattingInATerminalPutsBackTheCueExactlyAsSaid() async {
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com")]
+        frontmostApp = "com.apple.Terminal"
+        let session = makeSession()
+        _ = await press(hearing: "um my email", on: session)
+
+        await session.undoFormatting()
+        #expect(inserter.replacements == [.init(old: "kumar@example.com", new: "um my email")])
     }
 }
 

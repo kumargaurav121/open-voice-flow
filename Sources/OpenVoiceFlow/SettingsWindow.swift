@@ -4,29 +4,31 @@ import Core
 import SwiftUI
 
 /// Menu bar → Settings… (⌘,): hotkeys, language and AI cleanup; each kind of app's style; speech and AI providers
-/// with the user's own keys; the dictionary; privacy. Everything except the keys is one `Mode` value.
+/// with the user's own keys; the dictionary; snippets; privacy. Everything except the keys is one `Mode` value.
 @MainActor
 final class SettingsWindow {
     private let modes: ModeStore
     private let keys: APIKeys
     private let dictionary: DictionaryStore
+    private let snippets: SnippetStore
     private let history: HistoryModel
     private let cleanupAvailable: (CleanupMode) -> Bool
     private var window: NSWindow?
 
-    init(modes: ModeStore, keys: APIKeys, dictionary: DictionaryStore, history: HistoryModel,
+    init(modes: ModeStore, keys: APIKeys, dictionary: DictionaryStore, snippets: SnippetStore, history: HistoryModel,
          cleanupAvailable: @escaping (CleanupMode) -> Bool) {
         self.modes = modes
         self.keys = keys
         self.dictionary = dictionary
+        self.snippets = snippets
         self.history = history
         self.cleanupAvailable = cleanupAvailable
     }
 
     func show() {
         if window == nil {
-            let view = SettingsView(modes: modes, keys: keys, dictionary: dictionary, history: history,
-                                    cleanupAvailable: cleanupAvailable)
+            let view = SettingsView(modes: modes, keys: keys, dictionary: dictionary, snippets: snippets,
+                                    history: history, cleanupAvailable: cleanupAvailable)
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
                 styleMask: [.titled, .closable],
@@ -48,6 +50,7 @@ private struct SettingsView: View {
     let modes: ModeStore
     let keys: APIKeys
     let dictionary: DictionaryStore
+    let snippets: SnippetStore
     @Bindable var history: HistoryModel
     let cleanupAvailable: (CleanupMode) -> Bool
 
@@ -62,6 +65,8 @@ private struct SettingsView: View {
                 .tabItem { Label("Providers", systemImage: "cloud") }
             DictionaryView(store: dictionary)
                 .tabItem { Label("Dictionary", systemImage: "character.book.closed") }
+            SnippetsView(store: snippets)
+                .tabItem { Label("Snippets", systemImage: "text.quote") }
             PrivacyTab(history: history, modes: modes)
                 .tabItem { Label("Privacy", systemImage: "hand.raised") }
         }

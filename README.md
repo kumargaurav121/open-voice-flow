@@ -55,6 +55,7 @@ Nothing, so tapping `fn` doesn't also open it; your setting comes back when the 
 |---|---|
 | **Dictate** | Hold `fn`, speak, release. Text goes into the focused field. Say "comma", "full stop", "question mark", "new line" or "new paragraph" for the mark or the break; "first… second…" or "one, … two, …" makes a numbered list. |
 | **Styles** | Chat apps (Slack, Teams, Messages, WhatsApp, Discord, Telegram) get no full stop at the end of a short message, unless you say "full stop". Mail and Outlook, and Gmail or Outlook in a browser (Dia, Chrome, Arc, Brave, Safari, Edge), get the greeting and sign-off on lines of their own, and paragraphs with AI Cleanup on Thorough or Cloud. Code editors and terminals get exactly what you said. Switch each off in **Settings → Formatting**. |
+| **Snippets** | Save a cue and its text in **Settings → Snippets** (your address, a sign-off, a prompt you reuse). Say the cue on its own and the text is pasted exactly as saved, in any app. A cue inside a longer sentence is just words. Undo Formatting puts back the cue you said. |
 | **Undo Formatting** | `⌃⌥Z` (or **Undo Formatting** in the menu) puts your last dictation back as you said it: no spoken punctuation, line breaks, list or AI changes (fillers stay out). Only while it's still exactly as pasted, right before the cursor; otherwise nothing changes. In Slack, one-line dictations only. |
 | **Hands-free** | Double-tap `fn`, speak as long as you like (the notch shows a lock and a timer), tap `fn` again to paste. `Esc` throws it away; it stops by itself after 10 minutes. |
 | **Command** | Hold Right `⌥`, say e.g. *"Message Priya saying the deck is ready"* or, in Hinglish mode, *"Gurjeet ko message karo ki main meeting mein hoon"*. The notch shows the steps as Slack opens, finds the person, opens the DM and writes the message, then counts down 3 s before sending. Unknown commands say "Can't do that yet" and copy the transcript; nothing is ever typed. |
@@ -62,7 +63,7 @@ Nothing, so tapping `fn` doesn't also open it; your setting comes back when the 
 
 The menu bar icon has **Language** (English, the default, or Hinglish for Hindi and mixed speech),
 **AI Cleanup** (Off / Fast / Thorough / Cloud), **Recent**, **History…** and **Undo Formatting**, and **Settings…** (hotkeys,
-send countdown, styles per app, providers and keys, dictionary, privacy). Add names and product terms in **Settings →
+send countdown, styles per app, providers and keys, dictionary, snippets, privacy). Add names and product terms in **Settings →
 Dictionary** so they come out spelled your way.
 
 Slack commands need the **Slack desktop app**. If a step can't be verified (the person isn't found, two

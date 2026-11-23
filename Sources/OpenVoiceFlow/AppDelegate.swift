@@ -42,9 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let downloader = ModelDownloader(transport: URLSessionTransport())
     private var onboarding: (window: OnboardingWindow, model: OnboardingModel)?
     private let dictionary = DictionaryStore()
+    private let snippets = SnippetStore()
     private let modes = ModeStore()
     private let keys = APIKeys()
-    private lazy var settingsWindow = SettingsWindow(modes: modes, keys: keys, dictionary: dictionary, history: history,
+    private lazy var settingsWindow = SettingsWindow(modes: modes, keys: keys, dictionary: dictionary, snippets: snippets,
+                                                     history: history,
                                                      cleanupAvailable: { [weak self] in self?.cleanupAvailable($0) ?? false })
     private lazy var cloudCleaner = OpenAICompatibleCleaner(
         llm: { [weak self] in self?.modes.mode.cloudLLM ?? CloudLLM() },
@@ -93,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         frontTabAddress: { [weak self] in self?.frontTab.address() },
         frontWindowTitle: { FrontWindow.title() },
         styles: { [weak self] in self?.modes.mode.styles ?? AppStyles() },
+        snippets: { [weak self] in self?.snippets.snippets ?? [] },
         log: { [weak self] in self?.log.notice($0) }
     )
     private lazy var session = PushToTalkSession(

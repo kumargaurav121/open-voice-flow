@@ -8,7 +8,8 @@ public protocol TextCleaner: AnyObject {
 }
 
 /// Cleans every transcript: always the rules pass (for dictation with its formatting), plus the AI pass when
-/// the user has it switched on, then for dictation the layout (lists) and the app's style. Code editors and
+/// the user has it switched on, then for dictation the layout (lists) and the app's style. A snippet's cue said as
+/// the whole dictation pastes the snippet instead, as saved, in any app. Code editors and
 /// terminals get the raw transcript (a "cleaned" shell command is a broken one). Any AI timeout, failure or
 /// meaning-changing rewrite falls back to the rules output, and says why.
 @MainActor
@@ -17,6 +18,8 @@ public final class CleanupSpeechToText: SpeechToText {
     private let selectedAI: () -> TextCleaner?
     /// The style of the app the text goes to, read per transcript.
     private let style: () -> AppCategory
+    /// The user's snippets, read per transcript so edits apply straight away.
+    private let snippets: () -> [Snippet]
     private let formatting: Bool
     private let timeout: Duration
     /// The AI's time for an email, which it also lays out.
@@ -24,13 +27,14 @@ public final class CleanupSpeechToText: SpeechToText {
     private let log: (String) -> Void
     /// The last transcript before formatting (spoken punctuation, line breaks, AI cleanup, lists), for Undo
     /// Formatting: only the rules cleanup's fillers, spacing, capitals and digits. In a code editor, the raw
-    /// transcript it got.
+    /// transcript it got. For a snippet, the cue as said, through the rules cleanup.
     public private(set) var unformatted: String?
 
     public init(
         wrapping model: SpeechToText,
         selectedAI: @escaping () -> TextCleaner?,
         style: @escaping () -> AppCategory,
+        snippets: @escaping () -> [Snippet],
         formatting: Bool,
         timeout: Duration,
         emailTimeout: Duration,
@@ -39,6 +43,7 @@ public final class CleanupSpeechToText: SpeechToText {
         self.model = model
         self.selectedAI = selectedAI
         self.style = style
+        self.snippets = snippets
         self.formatting = formatting
         self.timeout = timeout
         self.emailTimeout = emailTimeout
@@ -50,6 +55,11 @@ public final class CleanupSpeechToText: SpeechToText {
         let raw = try await model.transcribe(clip, language: language)
         let style = style()
         if style != .other { log("Style: \(style)") }  // the app's kind, never the text
+        if let snippet = Snippet.matching(raw, in: snippets()) {
+            log("Snippet: pasting its text as saved")  // never its cue or text
+            unformatted = style == .code ? raw : RulesCleanup.clean(raw)
+            return snippet.text
+        }
         guard style != .code else {
             unformatted = raw
             return raw

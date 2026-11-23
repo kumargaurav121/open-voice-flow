@@ -45,7 +45,11 @@ Very short presses (< ~250 ms) are ignored, except that two quick taps of the di
    (at the quietest moment after 60 s without one), so most dictations are transcribed whole at release. At release only the tail is left; the parts' text is joined and cleaned up as one. The language is
    fixed at key down; commands are transcribed whole after release; `Esc` before the text is pasted discards it.
 2. **Transcribe** with the configured STT provider (local by default: Parakeet in English mode, the default; the Hinglish model via WhisperKit in Hinglish mode). Optional cloud: Deepgram Nova-3 with the user's own key (Hinglish mode asks for its multilingual code-switching, English mode for English; the dictionary goes as key terms). If it fails or takes over 8 s, the dictation is transcribed locally instead and the reason logged.
-3. **Clean up**, in two layers:
+3. **Clean up**, in two layers, unless the dictation is a snippet's cue:
+   - **Snippets, dictation only, first** (`Snippet`, v2 ticket 14, ADR 0018): a dictation that is a saved cue, whatever
+     its case, punctuation and fillers (a cue's digits match them said as words), pastes that snippet's text as saved, in
+     any app, code editors included. Nothing below runs. A cue inside a longer dictation is just words; commands
+     never match. Undo Formatting puts back the cue as said. Managed in Settings → Snippets.
    - **Rules, always** (~1 ms): hesitations (um, uh), stuttered English function words ("the the"), spacing and sentence capitalisation, and spoken numbers as digits (10 and up, and times, decimals, percentages and dates: "15 minutes", "11:30", "1.5 seconds", "5%", "1st of December"; one to nine stay words). Meaning-bearing words ("like", "so", "matlab") and Hindi reduplication ("jaldi jaldi") are left alone.
    - **Spoken punctuation and line breaks, dictation only** (`SpokenPunctuation`, v2 ticket 09): "comma", "full stop" or "period", "question mark", "exclamation mark" or "point", "colon", "semicolon", "dash" (a spaced hyphen, " - "), "new line" or "next line", and "new paragraph" become the mark or the break, in both languages.
      - After an article or determiner they stay words: "remove the comma", "a new line of laptops", and Hindi's "yah comma", "ek new line".
