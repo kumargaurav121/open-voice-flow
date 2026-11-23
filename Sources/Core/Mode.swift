@@ -107,10 +107,15 @@ public struct AppStyles: Codable, Equatable, Sendable {
 
     public init() {}
 
-    /// The style for a dictation into the app with this bundle ID (nil: no app in front), whose front window has
-    /// `windowTitle` (read only for a browser).
-    public func style(forApp bundleID: String?, windowTitle: () -> String? = { nil }) -> AppCategory {
-        style(for: AppCategory(bundleID: bundleID, windowTitle: windowTitle))
+    /// The style for a dictation into the app with this bundle ID (nil: no app in front). In a browser, with email
+    /// on, its page decides (`AppCategory.browserPage`: its tab's address, else its window's title). With email off
+    /// neither is read, so the browser is never asked for its tab and never asks the user.
+    public func style(forApp bundleID: String?, tabAddress: () -> String? = { nil }, windowTitle: () -> String? = { nil },
+                      log: (String) -> Void = { _ in }) -> AppCategory {
+        if email, let bundleID, AppCategory.browsers.contains(bundleID) {
+            return AppCategory.browserPage(address: tabAddress, title: windowTitle, log: log)
+        }
+        return style(for: AppCategory(bundleID: bundleID))
     }
 
     /// The style for a dictation into an app of `category`: none (`.other`) when that style is switched off.

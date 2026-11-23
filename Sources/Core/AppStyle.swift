@@ -20,15 +20,15 @@ public enum AppCategory: String, CaseIterable, Sendable {
 
     static let emailApps: Set<String> = ["com.apple.mail", "com.microsoft.Outlook"]
 
-    /// Browsers, whose front window's title names the page in them: Dia, Chrome, Arc, Brave, Safari, Edge.
+    /// Browsers, whose front page decides (`browserPage`): Dia, Chrome, Arc, Brave, Safari, Edge.
     static let browsers: Set<String> = [
         "company.thebrowser.dia", "com.google.Chrome", "company.thebrowser.Browser" /* Arc */, "com.brave.Browser",
         "com.apple.Safari", "com.microsoft.edgemac",
     ]
 
-    /// The category of the app with this bundle ID (nil: no app in front). In a browser, mail on the web is email,
-    /// by the front window's title (`windowTitle`, read only for a browser).
-    public init(bundleID: String?, windowTitle: () -> String?) {
+    /// The category of the app with this bundle ID (nil: no app in front). A browser's is `.other` here: its page
+    /// decides (`browserPage`).
+    public init(bundleID: String?) {
         guard let bundleID else { self = .other; return }
         if Self.chatApps.contains(bundleID) {
             self = .chat
@@ -36,17 +36,46 @@ public enum AppCategory: String, CaseIterable, Sendable {
             self = .email
         } else if CodeContext.isCodeEditor(bundleID: bundleID) {
             self = .code
-        } else if Self.browsers.contains(bundleID), windowTitle().map(Self.isWebMail) == true {
-            self = .email
         } else {
             self = .other
         }
     }
 
+    /// A browser's page: email for Gmail and Outlook on the web, by its tab's address (`address`), or by its
+    /// window's title when the browser doesn't give the address (`title`, read only then: not allowed yet, or no
+    /// answer). Why a page isn't mail is logged by its shape only, never its address or title.
+    static func browserPage(address: () -> String?, title: () -> String?, log: (String) -> Void) -> AppCategory {
+        if let address = address() {
+            if isWebMail(address: address) { return .email }
+            log("Browser page isn't mail, by its address")
+            return .other
+        }
+        let title = title()
+        if let title, isWebMail(title: title) { return .email }
+        log("Browser page isn't mail: no address; \(shape(ofTitle: title))")
+        return .other
+    }
+
+    /// Gmail ("https://mail.google.com/mail/u/0/#inbox", or an old work-account link under /a/; its Chat is under
+    /// /chat, or #chat in Gmail's own page) or Outlook on the web's mail ("https://outlook.office.com/mail/inbox";
+    /// its calendar is under /calendar).
+    static func isWebMail(address: String) -> Bool {
+        guard let url = URLComponents(string: address), let host = url.host?.lowercased(),
+              url.fragment?.hasPrefix("chat") != true
+        else { return false }
+        let mail = url.path == "/mail" || url.path.hasPrefix("/mail/")
+        return host == "mail.google.com" ? mail || url.path.hasPrefix("/a/") : outlookHosts.contains(host) && mail
+    }
+
+    /// Outlook on the web, for work or school accounts and for personal ones.
+    private static let outlookHosts: Set = [
+        "outlook.office.com", "outlook.office365.com", "outlook.cloud.microsoft", "outlook.live.com",
+    ]
+
     /// A page of Gmail ("Inbox (3) - kumar@example.com - Gmail"; a work account's ends in its company's name,
     /// "… - Acme Mail") or Outlook on the web's mail ("Mail - Kumar Gaurav - Outlook"; its calendar's starts
     /// "Calendar"). A browser may add its profile.
-    static func isWebMail(_ title: String) -> Bool {
+    static func isWebMail(title: String) -> Bool {
         let parts = title.components(separatedBy: " - ")
         return parts.first == "Mail" && parts.contains("Outlook") || zip(parts, parts.dropFirst()).contains { account, site in
             isAddress(account) && (site == "Gmail" || site.hasSuffix(" Mail"))

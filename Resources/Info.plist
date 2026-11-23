@@ -22,6 +22,8 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Open Voice Flow asks your browser for its front tab's address, so text dictated into Gmail or Outlook on the web is laid out as an email. It never reads the page.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Open Voice Flow listens while you hold the dictation key and turns your speech into text.</string>
 </dict>

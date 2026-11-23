@@ -84,10 +84,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // (Hinglish) and the cloud are cut at every pause.
         partLengths: { [weak self] in $0 == .english && self?.modes.mode.speech == .local ? .long : .short }
     )
+    /// Asks a browser for its front tab's address, so Gmail gets the email style.
+    private lazy var frontTab = FrontTab(log: { [weak self] in self?.log.notice($0) })
     private lazy var dictation = pipeline.dictation(
         selectedAI: { [weak self] in self?.activeCleaner },
         frontmostApp: { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
-        // Read only for a browser: its window's title names the page, so Gmail gets the email style.
+        // Both read only for a browser, the title only when the address can't be had.
+        frontTabAddress: { [weak self] in self?.frontTab.address() },
         frontWindowTitle: { FrontWindow.title() },
         styles: { [weak self] in self?.modes.mode.styles ?? AppStyles() },
         log: { [weak self] in self?.log.notice($0) }
@@ -503,6 +506,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch event {
         case .listening, .handsFree:
             status = .listening
+            frontTab.dictationStarting()
         case .released:
             // After the microphone stopped, so the click isn't recorded.
             if modes.mode.releaseSound {
@@ -523,6 +527,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             lastMessage = String(format: "Last dictation: text in %.1f s", t.transcribe + t.insert)
             log.notice(String(format: "Inserted. capture %.2fs transcribe %.2fs insert %.2fs parts %d tail %.1fs",
                               t.capture, t.transcribe, t.insert, t.parts, t.tail))
+            // Only now, so macOS's prompt can't freeze the dictation or take the paste.
+            frontTab.askIfPending()
         case .ignored(let reason):
             status = .ready
             log.notice("Ignored: \(reason)")

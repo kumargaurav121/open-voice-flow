@@ -74,6 +74,9 @@ on the clipboard.
 - Transcripts are kept in a local history (SQLite) until you clear it; audio only if you turn it on.
 - No analytics. Besides model downloads, the app only contacts the cloud providers you choose
   (Deepgram, OpenAI, Groq); their keys are stored in the macOS Keychain.
+- With the email style on, the app asks your browser for its front tab's address when you dictate into it, to
+  tell Gmail and Outlook on the web apart from other pages. macOS asks your permission once per browser. The
+  address is never stored, logged or sent.
 
 ## Models
 

@@ -16,15 +16,22 @@ struct TranscriptPipelineTests {
     var frontmostApp: String?
     /// The title of that app's front window (nil: it can't be read).
     var frontWindowTitle: String?
+    /// The address of a browser's front tab (nil: the browser didn't give it).
+    var frontTabAddress: String?
     var styles = AppStyles()
     /// Every line the pipeline logged.
-    let logged = LogLines()
+    let logged = Lines()
+    /// What the pipeline read about a browser's page, in order: "address", "title".
+    let pageReads = Lines()
 
     /// A session built as the app builds it, around the fake model, AI and inserter.
     func makeSession() -> PushToTalkSession {
-        let selected: TextCleaner? = aiEnabled ? ai : nil, app = frontmostApp, title = frontWindowTitle, styles = styles
+        let selected: TextCleaner? = aiEnabled ? ai : nil, app = frontmostApp, address = frontTabAddress,
+            title = frontWindowTitle, styles = styles
         let pipeline = TranscriptPipeline(speech: model, terms: { ["Gurjeet"] }, isEnglishWord: { _ in false })
-        let dictation = pipeline.dictation(selectedAI: { selected }, frontmostApp: { app }, frontWindowTitle: { title },
+        let dictation = pipeline.dictation(selectedAI: { selected }, frontmostApp: { app },
+                                           frontTabAddress: { [pageReads] in pageReads.lines.append("address"); return address },
+                                           frontWindowTitle: { [pageReads] in pageReads.lines.append("title"); return title },
                                            styles: { styles }, log: { [logged] in logged.lines.append($0) })
         return PushToTalkSession(
             recorder: recorder,
@@ -618,7 +625,8 @@ struct TranscriptPipelineTests {
     }
 
     /// Mail on the web in each browser (the user's choice, 2026-11-23): Gmail, a work account's Gmail (named after
-    /// the company), and Outlook on the web, by the front window's title.
+    /// the company), and Outlook on the web, by the front window's title when the browser doesn't give its tab's
+    /// address (not allowed yet).
     nonisolated static let webMail = [
         ("company.thebrowser.dia", "Inbox (3) - kumar@example.com - Gmail"),
         ("com.google.Chrome", "Inbox (1,234) - kumar@example.com - Acme Mail"),
@@ -635,6 +643,7 @@ struct TranscriptPipelineTests {
 
         #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted
                 == "Hi Mark,\n\nThanks for the call.\n\nThanks,\nKumar")
+        #expect(pageReads.lines == ["address", "title"])
     }
 
     @Test(arguments: [
@@ -652,15 +661,48 @@ struct TranscriptPipelineTests {
                 == "Hi Mark, thanks for the call. Thanks, Kumar")
     }
 
-    @Test mutating func aBrowserPageLeftUnstyledIsLoggedByItsTitlesShapeOnly() async {
-        frontmostApp = "company.thebrowser.dia"
+    /// The tab's address decides when the browser gives it (the user's choice, 2026-11-23): on their Mac, Gmail's
+    /// window title with a draft open had five parts and no address.
+    @Test(arguments: ["https://mail.google.com/mail/u/0/#inbox?compose=new", "https://mail.google.com/mail/u/1/#inbox",
+                      "https://mail.google.com/mail/u/0/?view=cm&fs=1" /* Gmail's own compose window */,
+                      "https://mail.google.com/a/example.com/#inbox" /* an old work-account link */,
+                      "https://outlook.office.com/mail/inbox", "https://outlook.office365.com/mail/",
+                      "https://outlook.live.com/mail/0/", "https://outlook.cloud.microsoft/mail/inbox"])
+    mutating func mailInABrowserIsKnownByItsTabsAddress(_ address: String) async {
+        frontmostApp = "com.google.Chrome"
+        frontTabAddress = address
+        frontWindowTitle = "New Message - Google Chrome"
+
+        #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted
+                == "Hi Mark,\n\nThanks for the call.\n\nThanks,\nKumar")
+        #expect(pageReads.lines == ["address"])
+    }
+
+    /// Gmail's Chat shares its host, and even its path; Outlook's calendar shares Outlook's host.
+    @Test(arguments: ["https://mail.google.com/chat/u/0/#chat/home", "https://mail.google.com/mail/u/0/#chat/dm/x",
+                      "https://outlook.office.com/calendar/view/week", "https://docs.google.com/document/d/1/edit"])
+    mutating func aBrowserPageWhoseAddressIsntMailHasNoStyleWhateverItsTitle(_ address: String) async {
+        frontmostApp = "com.google.Chrome"
+        frontTabAddress = address
+        frontWindowTitle = "Inbox (3) - kumar@example.com - Gmail - Google Chrome"
+
+        #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted
+                == "Hi Mark, thanks for the call. Thanks, Kumar")
+    }
+
+    @Test mutating func whyABrowserPageIsntMailIsLoggedWithoutItsAddressOrTitle() async {
+        frontmostApp = "com.google.Chrome"
+        frontTabAddress = "https://docs.google.com/document/d/1/edit"
+        _ = await press(hearing: "See you at five.")
+        frontTabAddress = nil
         frontWindowTitle = "Q4 plan - kumar@example.com - Google Docs"
         _ = await press(hearing: "See you at five.")
         frontWindowTitle = nil
         _ = await press(hearing: "See you at five.")
 
-        #expect(logged.lines == ["Browser page without the email style: title parts of 7, 17, 11 characters; an address is part 2",
-                                 "Browser page without the email style: title unreadable"])
+        #expect(logged.lines == ["Browser page isn't mail, by its address",
+                                 "Browser page isn't mail: no address; title parts of 7, 17, 11 characters; an address is part 2",
+                                 "Browser page isn't mail: no address; title unreadable"])
     }
 
     @Test mutating func anEmailsGreetingMayEndInAFullStop() async {
@@ -778,9 +820,10 @@ struct TranscriptPipelineTests {
         styles.email = false
         frontmostApp = "com.apple.mail"
         #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted == "Hi Mark, thanks for the call. Thanks, Kumar")
-        frontmostApp = "company.thebrowser.dia"
-        frontWindowTitle = "Inbox - kumar@example.com - Gmail"
+        frontmostApp = "com.google.Chrome"
+        frontTabAddress = "https://mail.google.com/mail/u/0/#inbox"
         #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted == "Hi Mark, thanks for the call. Thanks, Kumar")
+        #expect(pageReads.lines.isEmpty)  // nor is the browser asked for its tab, so it never asks the user
     }
 
     @Test mutating func withTheCodeStyleOffCodeEditorsAndTerminalsGetFormattedText() async {
@@ -816,8 +859,8 @@ struct TranscriptPipelineTests {
     }
 }
 
-/// Log lines, collected by reference so the pipeline's log closure can add to them.
+/// Lines collected by reference, so the pipeline's closures can add to them.
 @MainActor
-final class LogLines {
+final class Lines {
     var lines: [String] = []
 }

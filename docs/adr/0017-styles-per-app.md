@@ -23,19 +23,38 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
   - Code: the existing code-editor list (`CodeContext`).
   - Other: everything else, including other web apps (Slack in a browser stays unstyled).
   - The pipeline factory reads the app in front once per transcript, when the text is about to go in.
-- **Mail on the web** (added 2026-11-23, the user's choice: their email is Gmail in Dia, which the first version
-  left unstyled):
-  - In Dia, Chrome, Arc, Brave, Safari and Edge, the focused window's title names the page. Gmail's is "Inbox (3) -
-    kumar@example.com - Gmail" (Google's Workspace Updates blog, 2012). Assumed until seen on the device: "… - Acme
-    Mail" for a work account, Outlook on the web's "Mail - Kumar Gaurav - Outlook", and that Dia and Arc give the
-    page's title as the window's.
-  - So: an address followed by "Gmail" or a name ending in " Mail", or "Mail" first and "Outlook" after it. "Home -
-    Daily Mail" has no address, and Outlook's calendar is "Calendar - … - Outlook", so neither is mail.
-  - The title is read through Accessibility (already granted; two calls of at most 0.25 s each) only when a browser
-    is in front, and is never logged. A browser page left unstyled logs the title's shape instead: its parts'
-    lengths and which part is an address, or that it couldn't be read.
-  - The page's address would be more exact, but a Chromium browser exposes it only with its web accessibility
-    switched on, which slows the browser, or through AppleScript, which needs a new permission per browser.
+- **Mail on the web** (added 2026-11-23, the user's choices: their email is Gmail in a browser, which the first
+  version left unstyled):
+  - In Dia, Chrome, Arc, Brave, Safari and Edge, with the email style on, the page in front decides.
+  - **By the tab's address, first.** The app asks the browser through AppleScript ("URL of active tab of front
+    window"; Safari's "current tab"). Every one of these browsers has the command, Dia included.
+    - Gmail is `mail.google.com/mail/…` (or an old work-account link under `/a/`). Its Chat shares the host, under
+      `/chat` or as `#chat` in Gmail's own page, and isn't mail.
+    - Outlook on the web's mail is `…/mail/…` on outlook.office.com, office365.com, cloud.microsoft and live.com;
+      its calendar is under `/calendar`. Outlook's addresses are assumed, not yet seen on the device.
+    - A readable address decides, whatever the title says.
+  - **Why the address:** the window's title, the first version's signal, changed under the user (2026-11-23).
+    - In Chrome, a Gmail dictation matched by its title (an address, then the account's mail name).
+    - 21 s later, with a draft open, the title had five parts (25, 4, 17, 6 and 13 characters) and no address.
+    - The cause wasn't found. The 13 is likely the " - Google Chrome" Chrome adds for Accessibility.
+    - Reading the address through Chrome's web accessibility was rejected: it slows the browser.
+  - **The permission:** macOS asks once per browser ("Open Voice Flow wants to control Google Chrome"; entitlement
+    `com.apple.security.automation.apple-events`, `NSAppleEventsUsageDescription`).
+    - The app checks without asking, and runs the script only when allowed; a hung browser has 1 s to answer.
+    - When not yet asked, that dictation uses the title. The prompt comes a second after its text is in, so it
+      can't freeze that dictation or take its paste; a dictation that pastes nothing drops it. A dictation started
+      while the prompt is up could lose its paste to it.
+    - A browser is asked again only if the last ask got no answer (it quit).
+    - With the email style off, nothing is read and nothing asked.
+  - **By the window's title, when the browser doesn't give the address** (not allowed, or no answer), through
+    Accessibility (two calls of at most 0.25 s):
+    - an address followed by "Gmail" or a name ending in " Mail" (Gmail's "Inbox (3) - kumar@example.com - Gmail",
+      per Google's Workspace Updates blog, 2012; a work account's "… - Acme Mail" is assumed);
+    - or "Mail" first and "Outlook" after it (assumed). "Home - Daily Mail" has no address, and Outlook's calendar
+      is "Calendar - … - Outlook", so neither is mail.
+  - **The log** says why a browser page isn't mail: by its address, or no address and the title's shape (its parts'
+    lengths and which part is an address). The permission's status is logged as a number. The address and the
+    title never are.
 - **Chat** drops the final full stop the speech model gave a message of one or two sentences. These keep theirs:
   - a full stop said out loud ("see you at five full stop"; the user's choice, 2026-11-22);
   - question and exclamation marks;
@@ -93,6 +112,7 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
   moves elsewhere with the same count passes there. Email now checks positions.
 - **Not detected:**
   - Gmail installed as a browser's web app (its own bundle ID), and beta builds of the browsers;
+  - Outlook on a company's own server (its address is the company's);
   - sign-offs in Hindi;
   - a greeting with only lowercase names ("hi mark,");
   - a sign-off name the speech model wrote in lowercase.

@@ -39,23 +39,15 @@ public struct TranscriptPipeline {
 
     /// Dictation: the rules cleanup, spoken punctuation and line breaks, the AI cleanup the user switched on (nil
     /// when off), lists, then the style of the app in front (`frontmostApp`, its bundle ID; in a browser, the page
-    /// its window's title names, `frontWindowTitle`) unless switched off in `styles`. Code editors and terminals get
-    /// the raw transcript.
+    /// its front tab's address names, `frontTabAddress`, or else its window's title, `frontWindowTitle`) unless
+    /// switched off in `styles`. Code editors and terminals get the raw transcript.
     public func dictation(selectedAI: @escaping () -> TextCleaner?, frontmostApp: @escaping () -> String?,
-                          frontWindowTitle: @escaping () -> String?, styles: @escaping () -> AppStyles,
-                          log: @escaping (String) -> Void) -> CleanupSpeechToText {
+                          frontTabAddress: @escaping () -> String?, frontWindowTitle: @escaping () -> String?,
+                          styles: @escaping () -> AppStyles, log: @escaping (String) -> Void) -> CleanupSpeechToText {
         CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI,
                             style: {
-                                var read = false, title: String?
-                                let style = styles().style(forApp: frontmostApp()) {
-                                    read = true
-                                    title = frontWindowTitle()
-                                    return title
-                                }
-                                // A browser page left unstyled: its title's shape, never its text, so a missed Gmail
-                                // can be told apart from an unreadable title.
-                                if read, style != .email { log("Browser page without the email style: \(AppCategory.shape(ofTitle: title))") }
-                                return style
+                                styles().style(forApp: frontmostApp(), tabAddress: frontTabAddress,
+                                               windowTitle: frontWindowTitle, log: log)
                             },
                             formatting: true, timeout: Self.cleanupTimeout, emailTimeout: Self.emailCleanupTimeout, log: log)
     }
