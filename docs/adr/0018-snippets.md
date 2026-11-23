@@ -51,6 +51,8 @@ Status: Accepted · 2026-11-23 (v2 ticket 14)
 - **Not matched:** Hindi number words for a cue's digits ("nau" for "9"), and a Hinglish cue the Hinglish model
   spells differently ("meraa" for "mera").
 - **Trimming** drops a first line's indentation and a final line break.
+- **As for any dictation:** Undo Formatting is refused in Slack for a snippet with a line break (ADR 0016), and a
+  multi-line snippet pasted into a terminal puts every line at the prompt.
 - **A transcript that mishears the cue doesn't match.** The comparison is exact after normalising; the dictionary's
   respellings apply to the transcript first, so a name in a cue should be the dictionary's spelling.
 - **A snippet's text is pasted like any dictation:** typed in or pasted with the clipboard restored, so rich text
