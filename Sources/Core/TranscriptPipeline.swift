@@ -45,7 +45,18 @@ public struct TranscriptPipeline {
                           frontWindowTitle: @escaping () -> String?, styles: @escaping () -> AppStyles,
                           log: @escaping (String) -> Void) -> CleanupSpeechToText {
         CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI,
-                            style: { styles().style(forApp: frontmostApp(), windowTitle: frontWindowTitle) },
+                            style: {
+                                var read = false, title: String?
+                                let style = styles().style(forApp: frontmostApp()) {
+                                    read = true
+                                    title = frontWindowTitle()
+                                    return title
+                                }
+                                // A browser page left unstyled: its title's shape, never its text, so a missed Gmail
+                                // can be told apart from an unreadable title.
+                                if read, style != .email { log("Browser page without the email style: \(AppCategory.shape(ofTitle: title))") }
+                                return style
+                            },
                             formatting: true, timeout: Self.cleanupTimeout, emailTimeout: Self.emailCleanupTimeout, log: log)
     }
 

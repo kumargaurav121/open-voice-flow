@@ -49,9 +49,20 @@ public enum AppCategory: String, CaseIterable, Sendable {
     static func isWebMail(_ title: String) -> Bool {
         let parts = title.components(separatedBy: " - ")
         return parts.first == "Mail" && parts.contains("Outlook") || zip(parts, parts.dropFirst()).contains { account, site in
-            account.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
-                && (site == "Gmail" || site.hasSuffix(" Mail"))
+            isAddress(account) && (site == "Gmail" || site.hasSuffix(" Mail"))
         }
+    }
+
+    /// A window title's shape for the log, never its text: its parts' lengths and which one is an address.
+    static func shape(ofTitle title: String?) -> String {
+        guard let title else { return "title unreadable" }
+        let parts = title.components(separatedBy: " - ")
+        let address = parts.firstIndex(where: isAddress).map { "an address is part \($0 + 1)" } ?? "no address"
+        return "title parts of \(parts.map { String($0.count) }.joined(separator: ", ")) characters; \(address)"
+    }
+
+    private static func isAddress(_ part: String) -> Bool {
+        part.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
     }
 }
 

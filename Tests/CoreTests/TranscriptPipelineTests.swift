@@ -17,13 +17,15 @@ struct TranscriptPipelineTests {
     /// The title of that app's front window (nil: it can't be read).
     var frontWindowTitle: String?
     var styles = AppStyles()
+    /// Every line the pipeline logged.
+    let logged = LogLines()
 
     /// A session built as the app builds it, around the fake model, AI and inserter.
     func makeSession() -> PushToTalkSession {
         let selected: TextCleaner? = aiEnabled ? ai : nil, app = frontmostApp, title = frontWindowTitle, styles = styles
         let pipeline = TranscriptPipeline(speech: model, terms: { ["Gurjeet"] }, isEnglishWord: { _ in false })
         let dictation = pipeline.dictation(selectedAI: { selected }, frontmostApp: { app }, frontWindowTitle: { title },
-                                           styles: { styles }, log: { _ in })
+                                           styles: { styles }, log: { [logged] in logged.lines.append($0) })
         return PushToTalkSession(
             recorder: recorder,
             speechToText: dictation,
@@ -650,10 +652,21 @@ struct TranscriptPipelineTests {
                 == "Hi Mark, thanks for the call. Thanks, Kumar")
     }
 
+    @Test mutating func aBrowserPageLeftUnstyledIsLoggedByItsTitlesShapeOnly() async {
+        frontmostApp = "company.thebrowser.dia"
+        frontWindowTitle = "Q4 plan - kumar@example.com - Google Docs"
+        _ = await press(hearing: "See you at five.")
+        frontWindowTitle = nil
+        _ = await press(hearing: "See you at five.")
+
+        #expect(logged.lines == ["Browser page without the email style: title parts of 7, 17, 11 characters; an address is part 2",
+                                 "Browser page without the email style: title unreadable"])
+    }
+
     @Test mutating func anEmailsGreetingMayEndInAFullStop() async {
         frontmostApp = "com.apple.mail"
 
-        // As Parakeet wrote it on the user's Mac after a pause (2026-11-23).
+        // As pasted on the user's Mac after a pause (Parakeet, then Thorough; 2026-11-23).
         #expect(await press(hearing: "Hi Mark. Thanks for the call yesterday. The pilot starts on Monday. Thanks Kumar.").pasted
                 == "Hi Mark,\n\nThanks for the call yesterday. The pilot starts on Monday.\n\nThanks,\nKumar")
         #expect(await press(hearing: "Good morning, team. The build is ready.").pasted == "Good morning, team,\n\nThe build is ready.")
@@ -801,4 +814,10 @@ struct TranscriptPipelineTests {
 
         #expect(events.last == .commandParsed(.sendMessage(app: "slack", to: "Gurjeet", text: "See you at five.")))
     }
+}
+
+/// Log lines, collected by reference so the pipeline's log closure can add to them.
+@MainActor
+final class LogLines {
+    var lines: [String] = []
 }

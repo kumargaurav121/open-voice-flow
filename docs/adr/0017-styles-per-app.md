@@ -26,12 +26,14 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
 - **Mail on the web** (added 2026-11-23, the user's choice: their email is Gmail in Dia, which the first version
   left unstyled):
   - In Dia, Chrome, Arc, Brave, Safari and Edge, the focused window's title names the page. Gmail's is "Inbox (3) -
-    kumar@example.com - Gmail", or "… - Acme Mail" for a work account; Outlook on the web's is "Mail - Kumar Gaurav -
-    Outlook".
+    kumar@example.com - Gmail" (Google's Workspace Updates blog, 2012). Assumed until seen on the device: "… - Acme
+    Mail" for a work account, Outlook on the web's "Mail - Kumar Gaurav - Outlook", and that Dia and Arc give the
+    page's title as the window's.
   - So: an address followed by "Gmail" or a name ending in " Mail", or "Mail" first and "Outlook" after it. "Home -
     Daily Mail" has no address, and Outlook's calendar is "Calendar - … - Outlook", so neither is mail.
   - The title is read through Accessibility (already granted; two calls of at most 0.25 s each) only when a browser
-    is in front, and is never logged.
+    is in front, and is never logged. A browser page left unstyled logs the title's shape instead: its parts'
+    lengths and which part is an address, or that it couldn't be read.
   - The page's address would be more exact, but a Chromium browser exposes it only with its web accessibility
     switched on, which slows the browser, or through AppleScript, which needs a new permission per browser.
 - **Chat** drops the final full stop the speech model gave a message of one or two sentences. These keep theirs:
@@ -44,8 +46,8 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
 - **Email, rules (with AI on or off):**
   - **The greeting** goes on its own line with a blank line after it: "Hi Mark,", "Good morning team,", "Dear Mr.
     Sharma,", "Hi,". It must open the dictation and end in a comma, or a full stop, which becomes a comma: Parakeet
-    wrote "Hi Mark." after a pause on the user's Mac (2026-11-23). A title's full stop ("Mr.", "Prof.") doesn't
-    end it.
+    and then Thorough left "Hi Mark." after a pause on the user's Mac (2026-11-23). A title's or an initial's full
+    stop ("Prof.", "J.") doesn't end it.
     - A break the speaker or the AI put after it stays as it is.
     - The text after it starts with a capital: Thorough left "kal" lowercase.
   - **A sign-off ending the email**, after a sentence, goes after a blank line, with the name on the next line:
