@@ -14,7 +14,7 @@ final class AccessibilityField: FocusedField {
     static let wakeInterval: Duration = .milliseconds(100)
 
     func insertAtCursor(_ text: String) async -> DirectInsertResult {
-        guard let element = focusedElement() else { return .refused(diagnostic: "no focused element") }
+        guard let element = Self.focusedElement() else { return .refused(diagnostic: "no focused element") }
         let role = string(element, kAXRoleAttribute) ?? "?"
         // Password fields: leave them to the paste path, and never read them.
         if isSecure(element) { return .refused(diagnostic: "secure field") }
@@ -37,7 +37,7 @@ final class AccessibilityField: FocusedField {
     // MARK: Undo Formatting
 
     func reading() async -> FieldReading {
-        var element = focusedElement()
+        var element = Self.focusedElement()
         var asked: Bool?
         if element == nil {
             asked = wakeFrontmostApp()
@@ -45,7 +45,7 @@ final class AccessibilityField: FocusedField {
             while asked == true, element == nil, waited < Self.wakeWait {
                 try? await Task.sleep(for: Self.wakeInterval)
                 waited += Self.wakeInterval
-                element = focusedElement()
+                element = Self.focusedElement()
             }
         }
         guard let element else {
@@ -58,7 +58,7 @@ final class AccessibilityField: FocusedField {
     }
 
     func text(in range: Range<Int>) async -> String? {
-        guard let element = focusedElement(), !isSecure(element) else { return nil }
+        guard let element = Self.focusedElement(), !isSecure(element) else { return nil }
         var cfRange = CFRange(location: range.lowerBound, length: range.count)
         if let parameter = AXValueCreate(.cfRange, &cfRange) {
             var value: CFTypeRef?
@@ -75,7 +75,7 @@ final class AccessibilityField: FocusedField {
     }
 
     func select(_ range: Range<Int>) async -> Range<Int>? {
-        guard let element = focusedElement(), !isSecure(element) else { return nil }
+        guard let element = Self.focusedElement(), !isSecure(element) else { return nil }
         var cfRange = CFRange(location: range.lowerBound, length: range.count)
         guard let value = AXValueCreate(.cfRange, &cfRange) else { return nil }
         AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value)
@@ -98,7 +98,8 @@ final class AccessibilityField: FocusedField {
 
     // MARK: Reading the field
 
-    private func focusedElement() -> AXUIElement? {
+    /// The focused element, with the messaging timeout set; nil when there's none.
+    static func focusedElement() -> AXUIElement? {
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, Self.messagingTimeout)
         var focused: CFTypeRef?

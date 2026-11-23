@@ -64,6 +64,10 @@ public final class PushToTalkSession {
     private let speechReady: (Language) -> Bool
     /// The dictation's last transcript before formatting (`CleanupSpeechToText.unformatted`).
     private let unformatted: () -> String?
+    /// Learning from the user's fixes to a paste (v2 ticket 15); nil: never.
+    private let learning: CorrectionLearning?
+    /// Watching the last paste for the user's fixes, until it ends or the next dictation starts.
+    private var correctionWatch: Task<Void, Never>?
     private var state = State.idle
     /// The last pasted dictation and its text before formatting, until the next dictation (Undo Formatting).
     private var lastDictation: (pasted: String, unformatted: String)?
@@ -93,7 +97,8 @@ public final class PushToTalkSession {
         live: LiveTranscriber? = nil,
         handsFreeLimit: TimeInterval = PushToTalkSession.handsFreeLimit,
         speechReady: @escaping (Language) -> Bool = { _ in true },
-        unformatted: @escaping () -> String? = { nil }
+        unformatted: @escaping () -> String? = { nil },
+        learning: CorrectionLearning? = nil
     ) {
         self.recorder = recorder
         self.speechToText = speechToText
@@ -107,6 +112,7 @@ public final class PushToTalkSession {
         self.handsFreeLimit = handsFreeLimit
         self.speechReady = speechReady
         self.unformatted = unformatted
+        self.learning = learning
     }
 
     public func keyDown(_ kind: SessionKind = .dictation) {
@@ -119,6 +125,7 @@ public final class PushToTalkSession {
             return
         }
         guard case .idle = state, kind == .dictation || commands != nil else { return }
+        stopWatching()  // the user moved on; fixes seen so far still count
         if kind == .dictation { lastDictation = nil }
         let secondTap = kind == .dictation && tapReleasedAt.map { now() - $0 <= Self.doubleTapWindow } == true
         tapReleasedAt = nil
@@ -191,7 +198,10 @@ public final class PushToTalkSession {
         defer { state = .idle }
         do {
             let replaced = try await inserter.replace(last.pasted, with: last.unformatted)
-            if replaced { lastDictation = nil }
+            if replaced {
+                lastDictation = nil
+                stopWatching()  // the paste is gone
+            }
             onEvent(replaced ? .formattingUndone : .cantUndoFormatting)
         } catch {
             onEvent(.failed(.insertion))
@@ -220,6 +230,22 @@ public final class PushToTalkSession {
         case .on:
             break  // not a release of ours (the command key's, during hands-free)
         }
+    }
+
+    /// Watches the field the text was pasted into for the user's one-word fixes, and learns them (v2 ticket 15).
+    private func startWatching(_ pasted: String, with learning: CorrectionLearning) {
+        correctionWatch = Task { [weak self] in
+            let fixes = await CorrectionWatch.watch(pasted, in: learning.field, window: learning.window,
+                                                    interval: learning.interval)
+            // Still on: the switch may have been turned off while the field was watched.
+            guard !fixes.isEmpty, learning.isOn() else { return }
+            for word in learning.learn(fixes) { self?.onEvent(.suggested(word)) }
+        }
+    }
+
+    private func stopWatching() {
+        correctionWatch?.cancel()
+        correctionWatch = nil
     }
 
     private func startHandsFreeTimer() {
@@ -311,6 +337,7 @@ public final class PushToTalkSession {
             return
         }
         if let unformatted, unformatted != text { lastDictation = (text, unformatted) }
+        if let learning, learning.isOn() { startWatching(text, with: learning) }
         // The notch hears first; saving to history comes after.
         onEvent(.inserted(SessionTimings(
             capture: releasedAt - pressedAt,

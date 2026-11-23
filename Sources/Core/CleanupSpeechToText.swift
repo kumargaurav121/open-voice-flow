@@ -29,6 +29,8 @@ public final class CleanupSpeechToText: SpeechToText {
     /// Formatting: only the rules cleanup's fillers, spacing, capitals and digits. In a code editor, the raw
     /// transcript it got. For a snippet, the cue as said, through the rules cleanup.
     public private(set) var unformatted: String?
+    /// Whether the last transcript was a snippet's cue, so what was pasted is the snippet (not learned from).
+    public private(set) var lastWasSnippet = false
 
     public init(
         wrapping model: SpeechToText,
@@ -52,12 +54,14 @@ public final class CleanupSpeechToText: SpeechToText {
 
     public func transcribe(_ clip: AudioClip, language: Language) async throws -> String {
         unformatted = nil
+        lastWasSnippet = false
         let raw = try await model.transcribe(clip, language: language)
         let style = style()
         if style != .other { log("Style: \(style)") }  // the app's kind, never the text
         if let snippet = Snippet.matching(raw, in: snippets()) {
             log("Snippet: pasting its text as saved")  // never its cue or text
             unformatted = style == .code ? raw : RulesCleanup.clean(raw)
+            lastWasSnippet = true
             return snippet.text
         }
         guard style != .code else {

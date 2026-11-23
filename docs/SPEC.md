@@ -140,6 +140,8 @@ States (one state machine; one spring drives size, corners and content: opening 
 
 Hand-edited list of words/names (e.g. "Gurjeet", product names), edited in Settings → Dictionary and stored locally. After speech-to-text, anything that sounds like a term is respelled the user's way (both modes); the list is also LLM cleanup context. Not a Whisper prompt: the Hinglish model ignores it (ADR 0011).
 
+**Learning from corrections** (v2 ticket 15, ADR 0019): after a dictation is pasted, the field is re-read through Accessibility for up to 30 s, or until focus leaves it. A one-word fix the field shows twice in a row ("supabass" → "Supabase") is a word pair; the same pair within 7 days offers the new word for the dictionary, in the notch (a few seconds, no clicks) and the menu (**Add** / **Don't Suggest**). Only fixes to a name or term count, not to ordinary English. Only the pairs of the last 7 days are kept. On by default; Settings → Privacy turns it off. Snippets and commands aren't watched.
+
 ### 4.7 History & privacy
 
 - Each dictation's final text, time, frontmost app and mode stored locally (SQLite, `~/Library/Application Support/open-voice-flow/history/`), kept until cleared. Text that couldn't be inserted is saved too, marked "Not inserted", so it isn't lost.

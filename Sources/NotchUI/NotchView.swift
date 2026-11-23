@@ -83,6 +83,7 @@ struct NotchView: View {
         case .sent(let recipient, let confirmed): confirmed ? "Sent to \(recipient ?? "Slack")" : "Probably sent to \(recipient ?? "Slack"), check Slack"
         case .stopped: "Stopped, nothing sent"
         case .error(let error, _): error.message
+        case .suggestion(let word): "Add \(word) to your Dictionary? In the menu bar menu"
         }
     }
 }

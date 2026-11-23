@@ -95,6 +95,42 @@ final class FakeInserter: TextInserter {
     }
 }
 
+/// The field a dictation was pasted into: the paste with `before` and `after` around it, then on each later read
+/// the next of `reads`; once they run out, focus has left it.
+@MainActor
+final class FakePastedField: PastedField {
+    var before = ""
+    var after = ""
+    var reads: [String] = []
+    /// What was pasted (the inserter's last text).
+    var pasted: () -> String? = { nil }
+    /// How many reads after the first show the field before the paste landed (a ⌘V the app hasn't applied yet);
+    /// the last of them shows it landed.
+    var readsBeforeThePasteLands = 0
+    private(set) var followed = 0
+
+    func follow() async -> FieldText? {
+        followed += 1
+        return shown(landed: readsBeforeThePasteLands == 0)
+    }
+
+    func read() async -> FieldText? {
+        if readsBeforeThePasteLands > 0 {
+            readsBeforeThePasteLands -= 1
+            return shown(landed: readsBeforeThePasteLands == 0)
+        }
+        guard !reads.isEmpty else { return nil }
+        let text = reads.removeFirst()
+        return FieldText(text: text, cursor: text.utf16.count)
+    }
+
+    private func shown(landed: Bool) -> FieldText? {
+        guard let pasted = pasted() else { return nil }
+        let shown = landed ? pasted : ""
+        return FieldText(text: before + shown + after, cursor: (before + shown).utf16.count)
+    }
+}
+
 @MainActor
 final class FakeClock {
     private var current: TimeInterval = 1_000

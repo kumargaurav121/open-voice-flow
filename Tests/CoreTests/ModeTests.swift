@@ -165,4 +165,21 @@ struct ModeTests {
         let styles = ModeStore(defaults: defaults).mode.styles
         #expect(styles.chat && !styles.email && styles.code)
     }
+
+    /// The user's choice (2026-11-23): on, with a switch in Settings → Privacy.
+    @Test func learningFromCorrectionsIsOnUntilSwitchedOff() {
+        let store = ModeStore(defaults: defaults)
+        #expect(store.mode.learnsFromCorrections)
+
+        store.mode.learnsFromCorrections = false
+
+        #expect(!ModeStore(defaults: defaults).mode.learnsFromCorrections)
+    }
+
+    @Test(arguments: [#"{"version": 1, "language": "english"}"#, #"{"version": 1, "learnsFromCorrections": "maybe"}"#])
+    func settingsSavedBeforeLearningExistedOrUnreadableHaveItOn(_ saved: String) {
+        defaults.set(Data(saved.utf8), forKey: ModeStore.key)
+
+        #expect(ModeStore(defaults: defaults).mode.learnsFromCorrections)
+    }
 }

@@ -301,7 +301,7 @@ private struct CloudNotice: View {
 
 private struct PrivacyTab: View {
     @Bindable var history: HistoryModel
-    let modes: ModeStore
+    @Bindable var modes: ModeStore
 
     var body: some View {
         Form {
@@ -312,6 +312,15 @@ private struct PrivacyTab: View {
                     .foregroundStyle(.secondary)
             } header: {
                 Text("History")
+            }
+
+            Section {
+                Toggle("Learn from my corrections", isOn: $modes.mode.learnsFromCorrections)
+                Text("After a dictation is pasted, the app re-reads that field for up to 30 seconds. If you fix the same word the same way twice in a week, the menu bar offers to add it to your Dictionary. Only the two words are kept, on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Dictionary")
             }
 
             Section("What Leaves This Mac") {

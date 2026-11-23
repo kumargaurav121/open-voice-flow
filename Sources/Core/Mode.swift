@@ -155,11 +155,14 @@ public struct Mode: Codable, Equatable, Sendable {
     public var releaseSound = true
     /// Each category of app's style (chat, email, code).
     public var styles = AppStyles()
+    /// After a paste, re-read the field for the user's one-word fixes, to suggest dictionary words (v2 ticket 15).
+    public var learnsFromCorrections = true
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case version, language, cleanup, speech, cloudLLM, hotkeys, sendCountdown, releaseSound, styles
+        case learnsFromCorrections
     }
 
     public init(from decoder: Decoder) throws {
@@ -175,6 +178,7 @@ public struct Mode: Codable, Equatable, Sendable {
         let countdown = (try? container.decodeIfPresent(Int.self, forKey: .sendCountdown)) ?? nil
         sendCountdown = countdown.map(Self.clampedCountdown) ?? Self.defaultSendCountdown
         releaseSound = ((try? container.decodeIfPresent(Bool.self, forKey: .releaseSound)) ?? nil) ?? true
+        learnsFromCorrections = ((try? container.decodeIfPresent(Bool.self, forKey: .learnsFromCorrections)) ?? nil) ?? true
         styles = (try? container.decodeIfPresent(LenientAppStyles.self, forKey: .styles))?.value ?? AppStyles()
     }
 
@@ -189,6 +193,7 @@ public struct Mode: Codable, Equatable, Sendable {
         try container.encode(sendCountdown, forKey: .sendCountdown)
         try container.encode(releaseSound, forKey: .releaseSound)
         try container.encode(styles, forKey: .styles)
+        try container.encode(learnsFromCorrections, forKey: .learnsFromCorrections)
     }
 }
 

@@ -41,7 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }()
     private let downloader = ModelDownloader(transport: URLSessionTransport())
     private var onboarding: (window: OnboardingWindow, model: OnboardingModel)?
-    private let dictionary = DictionaryStore()
+    /// The spell check keeps fixes to ordinary English from becoming suggestions (v2 ticket 15).
+    private let dictionary = DictionaryStore(isEnglishWord: { EnglishWords.contains($0) })
     private let snippets = SnippetStore()
     private let modes = ModeStore()
     private let keys = APIKeys()
@@ -109,7 +110,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         commandSpeechToText: pipeline.commands(),
         live: pipeline.live,
         speechReady: { [weak self] in self?.isSpeechReady(for: $0) ?? true },
-        unformatted: { [weak self] in self?.dictation.unformatted }
+        unformatted: { [weak self] in self?.dictation.unformatted },
+        // Learning from fixes: switched on in Settings → Privacy, and never for a snippet's text.
+        learning: CorrectionLearning(
+            field: AccessibilityPastedField(),
+            isOn: { [weak self] in
+                guard let self else { return false }
+                return modes.mode.learnsFromCorrections && !dictation.lastWasSnippet
+            },
+            learn: { [weak self] in self?.dictionary.learn($0) ?? [] }
+        )
     )
     /// When the command key was released, for the "parsed in under 2 s" target.
     private var commandReleasedAt: TimeInterval?
@@ -216,6 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             loadCleaner()
         }
         if new.speech != old.speech { log.notice("Speech-to-text: \(new.speech.rawValue)") }
+        if old.learnsFromCorrections, !new.learnsFromCorrections { dictionary.forgetFixes() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -555,6 +566,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             log.notice("Undo Formatting: the last dictation is back as it was before formatting")
         case .cantUndoFormatting:
             break  // the inserter logged why
+        case .suggested:
+            log.notice("Dictionary: learned a word from your fixes; offered in the menu")  // never the word
         }
     }
 
@@ -610,6 +623,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         undo.keyEquivalent = "z"
         undo.keyEquivalentModifierMask = [.control, .option]
         menu.addItem(undo)
+        // Words learned from your fixes (v2 ticket 15), until added or turned down.
+        for word in dictionary.suggestions {
+            menu.addItem(.separator())
+            menu.addItem(item("Add “\(word)” to Dictionary") { [weak self] in self?.dictionary.accept(word) })
+            menu.addItem(item("Don't Suggest “\(word)”") { [weak self] in self?.dictionary.dismiss(word) })
+        }
 
         menu.addItem(.separator())
         let languages = NSMenu()

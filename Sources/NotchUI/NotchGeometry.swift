@@ -37,7 +37,7 @@ public enum NotchGeometry {
             case .listening, .transcribing, .inserted: self = .compact
             case .error(_, let expanded): self = expanded ? .details : .message
             case .acting: self = .steps
-            case .command, .sent, .stopped: self = .message
+            case .command, .sent, .stopped, .suggestion: self = .message
             }
         }
     }

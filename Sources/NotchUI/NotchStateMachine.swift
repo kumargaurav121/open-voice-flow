@@ -39,6 +39,8 @@ public struct NotchStateMachine: Sendable {
         case stopped
         /// `expanded` once clicked: shows `NotchError.details` under the message.
         case error(NotchError, expanded: Bool)
+        /// A word learned from the user's fixes, offered for the dictionary; adding it is in the menu (v2 ticket 15).
+        case suggestion(String)
     }
 
     public enum Input: Sendable, Equatable {
@@ -62,9 +64,13 @@ public struct NotchStateMachine: Sendable {
     public static let commandHold: TimeInterval = 3
     public static let sentHold: TimeInterval = 1.5
     public static let expandedErrorHold: TimeInterval = 10
+    /// Long enough to read the word and where to add it.
+    public static let suggestionHold: TimeInterval = 4
 
     public private(set) var phase = Phase.idle
     private var timerToken = 0
+    /// Suggestions waiting for the notch to be free, shown in turn.
+    private var pendingSuggestions: [String] = []
     /// The command an action is carrying out, for its progress line.
     private var intent: CommandIntent?
 
@@ -72,6 +78,14 @@ public struct NotchStateMachine: Sendable {
 
     @discardableResult
     public mutating func handle(_ input: Input) -> Effect? {
+        if case .session(.suggested(let word)) = input {
+            // Only when nothing else is showing: it never covers a dictation or an action. Otherwise it waits.
+            guard [.idle, .inserted].contains(phase) else {
+                pendingSuggestions.append(word)
+                return nil
+            }
+            return show(word)
+        }
         // Any new session event supersedes a pending collapse (e.g. pressing again during the ✓).
         if case .session = input { timerToken += 1 }
         if case .action = input { timerToken += 1 }
@@ -110,6 +124,8 @@ public struct NotchStateMachine: Sendable {
         case .session(.cantUndoFormatting):
             phase = .error(.cantUndoFormatting, expanded: false)
             return scheduleReturn(after: Self.errorHold)
+        case .session(.suggested):
+            break  // handled above
         case .clicked:
             guard case .error(let error, let expanded) = phase else { return nil }
             timerToken += 1  // supersede the pending collapse either way
@@ -120,9 +136,17 @@ public struct NotchStateMachine: Sendable {
             phase = .error(error, expanded: true)
             return scheduleReturn(after: Self.expandedErrorHold)
         case .timerFired(let token):
-            if token == timerToken { phase = .idle }
+            guard token == timerToken else { return nil }
+            // The next waiting suggestion, if any, as the notch frees up.
+            if !pendingSuggestions.isEmpty { return show(pendingSuggestions.removeFirst()) }
+            phase = .idle
         }
         return nil
+    }
+
+    private mutating func show(_ suggestion: String) -> Effect? {
+        phase = .suggestion(suggestion)
+        return scheduleReturn(after: Self.suggestionHold)
     }
 
     private mutating func handle(_ event: ActionEvent) -> Effect? {

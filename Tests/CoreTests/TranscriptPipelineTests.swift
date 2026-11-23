@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Core
 
@@ -21,6 +22,15 @@ struct TranscriptPipelineTests {
     var styles = AppStyles()
     var snippets: [Snippet] = []
     var language = Language.hinglish
+    /// Learning from corrections (Settings → Privacy), off but in its own tests.
+    var learning = false
+    /// How long the field is watched after a paste (30 s in the app).
+    var watchWindow: TimeInterval = 5
+    let field = FakePastedField()
+    /// Settings → Privacy's switch, which can change while a paste is watched.
+    let switchedOn = Switch()
+    /// The dictionary that learns from the user's fixes.
+    let dictionary = DictionaryStore(defaults: UserDefaults(suiteName: "ovf-pipeline-\(UUID().uuidString)")!)
     /// Every line the pipeline logged.
     let logged = Lines()
     /// What the pipeline read about a browser's page, in order: "address", "title".
@@ -36,6 +46,8 @@ struct TranscriptPipelineTests {
                                            frontWindowTitle: { [pageReads] in pageReads.lines.append("title"); return title },
                                            styles: { styles }, snippets: { snippets },
                                            log: { [logged] in logged.lines.append($0) })
+        field.pasted = { [inserter] in inserter.inserted.last }
+        switchedOn.on = learning
         return PushToTalkSession(
             recorder: recorder,
             speechToText: dictation,
@@ -43,7 +55,10 @@ struct TranscriptPipelineTests {
             commands: CommandParser(model: { [commandModel] in commandModel }),
             commandSpeechToText: pipeline.commands(),
             live: pipeline.live,
-            unformatted: { dictation.unformatted }
+            unformatted: { dictation.unformatted },
+            learning: CorrectionLearning(field: field, isOn: { [switchedOn] in switchedOn.on && !dictation.lastWasSnippet },
+                                         learn: { [dictionary] in dictionary.learn($0) }, window: watchWindow,
+                                         interval: 0.001)
         )
     }
 
@@ -952,6 +967,182 @@ extension TranscriptPipelineTests {
         await session.undoFormatting()
         #expect(inserter.replacements == [.init(old: "kumar@example.com", new: "um my email")])
     }
+}
+
+extension TranscriptPipelineTests {
+    // MARK: Learning from corrections (v2 ticket 15)
+
+    /// Dictates "deploy it on supabass" (pasted as "Deploy it on supabass."); the field then shows `reads` in
+    /// turn, and focus leaves it. Returns what the session reported after the paste.
+    mutating func dictateAndFix(_ reads: [String], hearing heard: String = "deploy it on supabass.",
+                                on session: PushToTalkSession? = nil) async -> [SessionEvent] {
+        let session = session ?? makeSession()
+        field.reads = reads
+        let followed = field.followed
+        _ = await press(hearing: heard, on: session)
+        let after = Lines()
+        session.onEvent = { [after] in if case .suggested(let word) = $0 { after.lines.append(word) } }
+        for _ in 0..<50 where field.followed == followed { try? await Task.sleep(for: .milliseconds(1)) }
+        guard field.followed > followed else { return [] }  // not watched
+        // The watch reads the field until the reads run out: focus gone.
+        for _ in 0..<200 where !field.reads.isEmpty { try? await Task.sleep(for: .milliseconds(5)) }
+        try? await Task.sleep(for: .milliseconds(20))
+        return after.lines.map { .suggested($0) }
+    }
+
+    @Test mutating func theSameOneWordFixTwiceSuggestsTheWord() async {
+        learning = true
+        let fixed = "Deploy it on Supabase."
+
+        #expect(await dictateAndFix([fixed, fixed]).isEmpty)
+        #expect(await dictateAndFix([fixed, fixed]) == [.suggested("Supabase")])
+        #expect(dictionary.suggestions == ["Supabase"])
+    }
+
+    @Test mutating func aFixAmongMoreTypingOrAroundTextCounts() async {
+        learning = true
+        field.before = "Notes: "
+        field.after = " Thanks."
+        let fixed = "Notes: Deploy it on Supabase. Thanks."
+
+        _ = await dictateAndFix([fixed, fixed])
+        // Pasted "Deploy supabass today.", then fixed, with more typed after it.
+        let typedOn = "Notes: Deploy Supabase today, please. Thanks."
+        #expect(await dictateAndFix([typedOn, typedOn], hearing: "deploy supabass today.") == [.suggested("Supabase")])
+    }
+
+    /// A word being typed is seen once; only a fix the field shows twice in a row is learned.
+    @Test mutating func aHalfTypedWordIsntLearned() async {
+        learning = true
+
+        _ = await dictateAndFix(["Deploy it on Supa", "Deploy it on Supab", "Deploy it on Supabase."])
+        _ = await dictateAndFix(["Deploy it on Supa", "Deploy it on Supab", "Deploy it on Supabase."])
+
+        #expect(dictionary.suggestions.isEmpty)
+    }
+
+    /// A ⌘V the app applies a moment later is still watched.
+    @Test mutating func aPasteThatLandsAMomentLaterIsStillWatched() async {
+        learning = true
+        let fixed = "Deploy it on Supabase."
+
+        field.readsBeforeThePasteLands = 3
+        _ = await dictateAndFix([fixed, fixed])
+        field.readsBeforeThePasteLands = 3
+        _ = await dictateAndFix([fixed, fixed])
+
+        #expect(dictionary.suggestions == ["Supabase"])
+    }
+
+    @Test mutating func theSameFixTwiceInOnePasteIsStillOneDictation() async {
+        learning = true
+
+        _ = await dictateAndFix(["Supabase it on Supabase.", "Supabase it on Supabase."],
+                                hearing: "supabass it on supabass.")
+
+        #expect(dictionary.suggestions.isEmpty)
+    }
+
+    @Test mutating func editsAroundThePasteAreNotFixes() async {
+        learning = true
+        field.before = "Notes: "
+        for _ in 0..<2 {
+            _ = await dictateAndFix(["Todo: Deploy it on Supabase.", "Todo: Deploy it on Supabase."])
+        }
+
+        #expect(dictionary.suggestions.isEmpty)
+    }
+
+    @Test mutating func aFixAfterTheWatchEndsIsntLearned() async {
+        learning = true
+        watchWindow = 0.05
+        let fixed = "Deploy it on Supabase.", unchanged = "Deploy it on supabass."
+        for _ in 0..<2 {
+            // Reads come at least a millisecond apart, so the fix comes after the window.
+            _ = await dictateAndFix(Array(repeating: unchanged, count: 150) + [fixed, fixed])
+        }
+
+        #expect(dictionary.suggestions.isEmpty)
+    }
+
+    @Test mutating func turningLearningOffDuringAWatchLearnsNothing() async {
+        learning = true
+        let fixed = "Deploy it on Supabase."
+        _ = await dictateAndFix([fixed, fixed])
+
+        let session = makeSession()
+        field.reads = Array(repeating: fixed, count: 1_000)  // focus never leaves
+        _ = await press(hearing: "deploy it on supabass.", on: session)
+        try? await Task.sleep(for: .milliseconds(20))
+        switchedOn.on = false
+        field.reads = []
+        try? await Task.sleep(for: .milliseconds(20))
+
+        #expect(dictionary.suggestions.isEmpty)
+    }
+
+    @Test mutating func editsThatArentOneWordForOneWordArentLearned() async {
+        learning = true
+        for _ in 0..<2 {
+            _ = await dictateAndFix(["Deploy it on Supa base.", "Deploy it on Supa base."])  // two words for one
+            _ = await dictateAndFix(["Deploy on Supabase.", "Deploy on Supabase."])  // and a word deleted
+            _ = await dictateAndFix(["Please deploy it on Supabase.", "Please deploy it on Supabase."])  // before
+        }
+
+        #expect(dictionary.suggestions.isEmpty)
+    }
+
+    @Test mutating func aFixMadeOnlyAfterFocusLeftIsntLearned() async {
+        learning = true
+        // Focus leaves straight away: the fix, if any, is made after.
+        _ = await dictateAndFix([])
+        _ = await dictateAndFix([])
+
+        #expect(dictionary.suggestions.isEmpty)
+        #expect(field.followed == 2)
+    }
+
+    @Test mutating func withLearningOffNothingIsWatched() async {
+        learning = false
+        let fixed = "Deploy it on Supabase."
+
+        _ = await dictateAndFix([fixed, fixed])
+        _ = await dictateAndFix([fixed, fixed])
+
+        #expect(field.followed == 0)
+        #expect(dictionary.suggestions.isEmpty)
+    }
+
+    @Test mutating func snippetsAreNotWatched() async {
+        learning = true
+        snippets = [Snippet(cue: "my email", text: "kumar@example.com")]
+
+        _ = await press(hearing: "my email")
+
+        #expect(field.followed == 0)
+    }
+
+    /// A new dictation ends the watch: a fix the field already showed twice still counts.
+    @Test mutating func aNewDictationEndsTheWatchKeepingTheFixSoFar() async {
+        learning = true
+        let session = makeSession()
+        let fixed = "Deploy it on Supabase."
+        _ = await dictateAndFix([fixed, fixed], on: session)
+        field.reads = Array(repeating: fixed, count: 1_000)  // focus never leaves
+        _ = await press(hearing: "deploy it on supabass.", on: session)
+        try? await Task.sleep(for: .milliseconds(20))
+
+        field.reads = []
+        _ = await press(hearing: "next one", on: session)
+
+        #expect(dictionary.suggestions == ["Supabase"])
+    }
+}
+
+/// A switch the test can flip while the session runs.
+@MainActor
+final class Switch {
+    var on = false
 }
 
 /// Lines collected by reference, so the pipeline's closures can add to them.

@@ -31,6 +31,8 @@ public enum SessionEvent: Equatable, Sendable {
     /// Undo Formatting left the last dictation alone: it wasn't exactly as pasted just before the cursor (edited,
     /// or the app reports its text differently), or the field couldn't be read.
     case cantUndoFormatting
+    /// A word the dictionary now suggests, learned from the user's fixes to pasted dictations (v2 ticket 15).
+    case suggested(String)
 }
 
 /// A dictation's final text, for history. Reported whether or not it reached the app, so text that

@@ -56,3 +56,88 @@ struct DictionaryStoreTests {
         #expect(DictionaryStore(defaults: defaults).terms.isEmpty)
     }
 }
+
+/// Learning from corrections (v2 ticket 15): the same one-word fix twice within 7 days suggests the word.
+@MainActor
+struct DictionaryLearningTests {
+    let defaults = UserDefaults(suiteName: "ovf-learning-\(UUID().uuidString)")!
+    var today = Date(timeIntervalSince1970: 1_800_000_000)
+    /// Ordinary English, as the app's spell check knows it.
+    static let english: Set = ["there", "their", "the", "message", "karo"]
+
+    func store() -> DictionaryStore {
+        let today = today
+        return DictionaryStore(defaults: defaults, now: { today }, isEnglishWord: { Self.english.contains($0) })
+    }
+
+    mutating func days(_ count: Double) { today += count * 24 * 60 * 60 }
+
+    @Test mutating func theSameFixTwiceWithinSevenDaysSuggestsTheWord() {
+        #expect(store().learn([WordFix(from: "gurujit", to: "Gurjeet")]).isEmpty)
+        days(6)
+        #expect(store().learn([WordFix(from: "Gurujit", to: "Gurjeet")]) == ["Gurjeet"])
+
+        #expect(store().suggestions == ["Gurjeet"])  // kept across launches
+        #expect(store().terms.isEmpty)  // only offered
+    }
+
+    @Test mutating func aFixOnceOrEightDaysApartSuggestsNothing() {
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+        days(8)
+        #expect(store().learn([WordFix(from: "gurujit", to: "Gurjeet")]).isEmpty)
+        // Another fix of the same word to something else isn't the same fix.
+        days(1)
+        #expect(store().learn([WordFix(from: "gurujit", to: "Gurjit")]).isEmpty)
+        #expect(store().suggestions.isEmpty)
+    }
+
+    @Test mutating func anAcceptedSuggestionBecomesADictionaryWord() {
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+
+        store().accept("Gurjeet")
+
+        #expect(store().terms == ["Gurjeet"])
+        #expect(store().suggestions.isEmpty)
+    }
+
+    @Test mutating func aDismissedSuggestionIsNeverOfferedAgain() {
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+
+        store().dismiss("Gurjeet")
+        days(1)
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+
+        #expect(store().suggestions.isEmpty)
+        #expect(store().terms.isEmpty)
+    }
+
+    /// The user's choice (2026-11-23): a fix to ordinary English wouldn't help the dictionary.
+    @Test mutating func onlyNamesAndTermsAreSuggested() {
+        let fixes = [WordFix(from: "there", to: "their"), WordFix(from: "the", to: "The"),
+                     WordFix(from: "supa", to: "Supabase"), WordFix(from: "प्रिया", to: "प्रियं")]
+        let first = store()
+        first.add("Supabase")  // already a dictionary word
+        first.learn(fixes)
+
+        #expect(store().learn(fixes).isEmpty)
+    }
+
+    /// Settings → Privacy's switch turned off: the fixes kept so far go.
+    @Test mutating func forgottenFixesDontCount() {
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet")])
+
+        store().forgetFixes()
+
+        #expect(store().learn([WordFix(from: "gurujit", to: "Gurjeet")]).isEmpty)
+    }
+
+    @Test mutating func severalFixesInOneDictationEachCount() {
+        store().learn([WordFix(from: "gurujit", to: "Gurjeet"), WordFix(from: "supabass", to: "Supabase")])
+
+        #expect(store().learn([WordFix(from: "gurujit", to: "Gurjeet"), WordFix(from: "supabass", to: "Supabase")])
+                == ["Gurjeet", "Supabase"])
+    }
+}

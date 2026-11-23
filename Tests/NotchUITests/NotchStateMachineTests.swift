@@ -217,4 +217,58 @@ struct NotchStateMachineTests {
         }
         #expect(delay == NotchStateMachine.errorHold)
     }
+
+    // MARK: Suggestions (v2 ticket 15)
+
+    /// The notch says it; the menu acts (the user's choice).
+    @Test func aSuggestionShowsWhenIdleThenReturnsToIdle() {
+        var notch = NotchStateMachine()
+
+        let effect = notch.handle(.session(.suggested("Supabase")))
+
+        #expect(notch.phase == .suggestion("Supabase"))
+        guard case .returnToIdle(let delay, let token) = effect else {
+            Issue.record("expected a scheduled return to idle, got \(String(describing: effect))")
+            return
+        }
+        #expect(delay == NotchStateMachine.suggestionHold)
+        notch.handle(.timerFired(token))
+        #expect(notch.phase == .idle)
+    }
+
+    @Test func aSuggestionNeverInterruptsADictation() {
+        var notch = NotchStateMachine()
+        notch.handle(.session(.listening(.dictation)))
+
+        let effect = notch.handle(.session(.suggested("Supabase")))
+
+        #expect(notch.phase == .listening(.dictation))
+        #expect(effect == nil)
+    }
+
+    /// A suggestion that comes as the next dictation starts shows after that dictation's ✓, then the next one.
+    @Test func suggestionsWaitForTheNotchToBeFreeAndShowInTurn() {
+        var notch = NotchStateMachine()
+        notch.handle(.session(.listening(.dictation)))
+        notch.handle(.session(.suggested("Supabase")))
+        notch.handle(.session(.suggested("Gurjeet")))
+
+        let check = notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0, parts: 0, tail: 1))))
+        guard case .returnToIdle(_, let token) = check else { Issue.record("no timer"); return }
+        let first = notch.handle(.timerFired(token))
+        #expect(notch.phase == .suggestion("Supabase"))
+
+        guard case .returnToIdle(_, let next) = first else { Issue.record("no timer"); return }
+        notch.handle(.timerFired(next))
+        #expect(notch.phase == .suggestion("Gurjeet"))
+    }
+
+    @Test func aSuggestionReplacesTheCheckAfterAPaste() {
+        var notch = NotchStateMachine()
+        notch.handle(.session(.inserted(SessionTimings(capture: 1, transcribe: 1, insert: 0, parts: 0, tail: 1))))
+
+        notch.handle(.session(.suggested("Supabase")))
+
+        #expect(notch.phase == .suggestion("Supabase"))
+    }
 }

@@ -64,7 +64,8 @@ Nothing, so tapping `fn` doesn't also open it; your setting comes back when the 
 The menu bar icon has **Language** (English, the default, or Hinglish for Hindi and mixed speech),
 **AI Cleanup** (Off / Fast / Thorough / Cloud), **Recent**, **History…** and **Undo Formatting**, and **Settings…** (hotkeys,
 send countdown, styles per app, providers and keys, dictionary, snippets, privacy). Add names and product terms in **Settings →
-Dictionary** so they come out spelled your way.
+Dictionary** so they come out spelled your way. When you fix the same name the same way twice in a week (say "supabass"
+to "Supabase"), the menu offers to add it.
 
 Slack commands need the **Slack desktop app**. If a step can't be verified (the person isn't found, two
 people match, a draft is already in that DM, Slack lost focus), it stops, says why, and puts your message
@@ -75,6 +76,8 @@ on the clipboard.
 - Transcripts are kept in a local history (SQLite) until you clear it; audio only if you turn it on.
 - No analytics. Besides model downloads, the app only contacts the cloud providers you choose
   (Deepgram, OpenAI, Groq); their keys are stored in the macOS Keychain.
+- After a dictation is pasted, the app re-reads that field for up to 30 seconds to learn your one-word fixes. Only
+  the two words of each fix are kept, for 7 days, on this Mac. Turn it off in **Settings → Privacy**.
 - With the email style on, the app asks your browser for its front tab's address when you dictate into it, to
   tell Gmail and Outlook on the web apart from other pages. macOS asks your permission once per browser. The
   address is never stored, logged or sent.

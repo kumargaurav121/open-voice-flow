@@ -138,6 +138,20 @@ struct NotchPanelBody: View {
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
+        case .suggestion(let word):
+            // The notch only says it; adding is in the menu, so a stray click changes nothing.
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Add “\(word)” to your Dictionary?")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Menu bar → Add")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity)
         default:
             ScrollingWaveform(phase: model.phase, levels: model.history, reduceMotion: reduceMotion)
         }
@@ -179,7 +193,7 @@ struct NotchPanelBody: View {
             Text(confirmed ? "Sent" : "Check")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(confirmed ? .green : .orange)
-        case .stopped:
+        case .stopped, .suggestion:
             EmptyView()
         case .idle:
             EmptyView()
@@ -349,6 +363,7 @@ private struct StatusBadge: View {
         case .command(.unknown): "questionmark"
         case .sent(_, let confirmed): confirmed ? "checkmark" : "exclamationmark"
         case .stopped: "xmark"
+        case .suggestion: "character.book.closed.fill"
         case .listening(.handsFree): "lock.fill"
         default: "mic.fill"
         }
@@ -362,7 +377,7 @@ private struct StatusBadge: View {
         case .inserted: .green
         case .command, .acting: .cyan
         case .sent(_, let confirmed): confirmed ? .green : .orange
-        case .stopped: .white
+        case .stopped, .suggestion: .white
         case .error: Color(red: 1, green: 0.38, blue: 0.36)
         }
     }
