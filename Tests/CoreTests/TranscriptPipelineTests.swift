@@ -14,14 +14,16 @@ struct TranscriptPipelineTests {
     var aiEnabled = false
     /// The bundle ID of the app in front, where the text goes.
     var frontmostApp: String?
+    /// The title of that app's front window (nil: it can't be read).
+    var frontWindowTitle: String?
     var styles = AppStyles()
 
     /// A session built as the app builds it, around the fake model, AI and inserter.
     func makeSession() -> PushToTalkSession {
-        let selected: TextCleaner? = aiEnabled ? ai : nil, app = frontmostApp, styles = styles
+        let selected: TextCleaner? = aiEnabled ? ai : nil, app = frontmostApp, title = frontWindowTitle, styles = styles
         let pipeline = TranscriptPipeline(speech: model, terms: { ["Gurjeet"] }, isEnglishWord: { _ in false })
-        let dictation = pipeline.dictation(selectedAI: { selected }, frontmostApp: { app }, styles: { styles },
-                                           log: { _ in })
+        let dictation = pipeline.dictation(selectedAI: { selected }, frontmostApp: { app }, frontWindowTitle: { title },
+                                           styles: { styles }, log: { _ in })
         return PushToTalkSession(
             recorder: recorder,
             speechToText: dictation,
@@ -613,6 +615,58 @@ struct TranscriptPipelineTests {
         #expect(await press(hearing: "Hi, are you free tomorrow?").pasted == "Hi,\n\nAre you free tomorrow?")
     }
 
+    /// Mail on the web in each browser (the user's choice, 2026-11-23): Gmail, a work account's Gmail (named after
+    /// the company), and Outlook on the web, by the front window's title.
+    nonisolated static let webMail = [
+        ("company.thebrowser.dia", "Inbox (3) - kumar@example.com - Gmail"),
+        ("com.google.Chrome", "Inbox (1,234) - kumar@example.com - Acme Mail"),
+        ("company.thebrowser.Browser", "Re: Pilot - Monday - kumar@example.com - Gmail"),
+        ("com.brave.Browser", "Compose Mail - kumar@example.com - Gmail"),
+        ("com.apple.Safari", "Mail - Kumar Gaurav - Outlook"),
+        ("com.microsoft.edgemac", "Inbox - kumar@example.com - Gmail - Work"),
+    ]
+
+    @Test(arguments: webMail)
+    mutating func mailInABrowserGetsTheEmailStyle(_ browser: String, _ title: String) async {
+        frontmostApp = browser
+        frontWindowTitle = title
+
+        #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted
+                == "Hi Mark,\n\nThanks for the call.\n\nThanks,\nKumar")
+    }
+
+    @Test(arguments: [
+        ("company.thebrowser.dia", "Q4 plan - Google Docs"),
+        ("com.google.Chrome", "Home - Daily Mail"),  // a site named Mail: no account's address before it
+        ("com.brave.Browser", "Calendar - Kumar Gaurav - Outlook"),  // Outlook's calendar, not its mail
+        ("com.apple.Safari", nil),  // a title that can't be read
+        ("com.apple.TextEdit", "Inbox - kumar@example.com - Gmail"),  // not a browser
+    ] as [(String, String?)])
+    mutating func otherPagesInABrowserHaveNoStyle(_ app: String, _ title: String?) async {
+        frontmostApp = app
+        frontWindowTitle = title
+
+        #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted
+                == "Hi Mark, thanks for the call. Thanks, Kumar")
+    }
+
+    @Test mutating func anEmailsGreetingMayEndInAFullStop() async {
+        frontmostApp = "com.apple.mail"
+
+        // As Parakeet wrote it on the user's Mac after a pause (2026-11-23).
+        #expect(await press(hearing: "Hi Mark. Thanks for the call yesterday. The pilot starts on Monday. Thanks Kumar.").pasted
+                == "Hi Mark,\n\nThanks for the call yesterday. The pilot starts on Monday.\n\nThanks,\nKumar")
+        #expect(await press(hearing: "Good morning, team. The build is ready.").pasted == "Good morning, team,\n\nThe build is ready.")
+        #expect(await press(hearing: "Dear Mr. Sharma. Please find the report attached.").pasted
+                == "Dear Mr. Sharma,\n\nPlease find the report attached.")
+        #expect(await press(hearing: "Hi. Are you free tomorrow?").pasted == "Hi,\n\nAre you free tomorrow?")
+        // A title's full stop doesn't end the greeting.
+        #expect(await press(hearing: "Dear Prof. Rao. Thanks for the review.").pasted == "Dear Prof. Rao,\n\nThanks for the review.")
+        #expect(await press(hearing: "Dear Prof. Rao, thanks for the review.").pasted == "Dear Prof. Rao,\n\nThanks for the review.")
+        #expect(await press(hearing: "Hi J. Smith, thanks for the review.").pasted == "Hi J. Smith,\n\nThanks for the review.")
+        #expect(await press(hearing: "Dear Mr. sharma, please call me.").pasted == "Dear Mr. sharma, please call me.")
+    }
+
     @Test mutating func onlyAGreetingOpeningTheEmailGoesOnItsOwnLine() async {
         frontmostApp = "com.apple.mail"
 
@@ -710,6 +764,9 @@ struct TranscriptPipelineTests {
 
         styles.email = false
         frontmostApp = "com.apple.mail"
+        #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted == "Hi Mark, thanks for the call. Thanks, Kumar")
+        frontmostApp = "company.thebrowser.dia"
+        frontWindowTitle = "Inbox - kumar@example.com - Gmail"
         #expect(await press(hearing: "Hi Mark, thanks for the call. Thanks, Kumar").pasted == "Hi Mark, thanks for the call. Thanks, Kumar")
     }
 

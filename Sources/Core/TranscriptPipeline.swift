@@ -38,12 +38,14 @@ public struct TranscriptPipeline {
     }
 
     /// Dictation: the rules cleanup, spoken punctuation and line breaks, the AI cleanup the user switched on (nil
-    /// when off), lists, then the style of the app in front (`frontmostApp`, its bundle ID) unless switched off in
-    /// `styles`. Code editors and terminals get the raw transcript.
+    /// when off), lists, then the style of the app in front (`frontmostApp`, its bundle ID; in a browser, the page
+    /// its window's title names, `frontWindowTitle`) unless switched off in `styles`. Code editors and terminals get
+    /// the raw transcript.
     public func dictation(selectedAI: @escaping () -> TextCleaner?, frontmostApp: @escaping () -> String?,
-                          styles: @escaping () -> AppStyles, log: @escaping (String) -> Void) -> CleanupSpeechToText {
+                          frontWindowTitle: @escaping () -> String?, styles: @escaping () -> AppStyles,
+                          log: @escaping (String) -> Void) -> CleanupSpeechToText {
         CleanupSpeechToText(wrapping: transcription, selectedAI: selectedAI,
-                            style: { styles().style(forApp: frontmostApp()) },
+                            style: { styles().style(forApp: frontmostApp(), windowTitle: frontWindowTitle) },
                             formatting: true, timeout: Self.cleanupTimeout, emailTimeout: Self.emailCleanupTimeout, log: log)
     }
 

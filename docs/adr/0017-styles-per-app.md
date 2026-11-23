@@ -19,10 +19,21 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
 ## Decision
 - **Categories, by bundle ID** (from the apps on the user's Mac and Homebrew's cask definitions):
   - Chat: Slack, Teams (new and classic), Messages, WhatsApp, Discord, Telegram (both builds).
-  - Email: Mail, Outlook.
+  - Email: Mail, Outlook, and mail on the web in a browser (below).
   - Code: the existing code-editor list (`CodeContext`).
-  - Other: everything else, including web apps in a browser (out of scope).
+  - Other: everything else, including other web apps (Slack in a browser stays unstyled).
   - The pipeline factory reads the app in front once per transcript, when the text is about to go in.
+- **Mail on the web** (added 2026-11-23, the user's choice: their email is Gmail in Dia, which the first version
+  left unstyled):
+  - In Dia, Chrome, Arc, Brave, Safari and Edge, the focused window's title names the page. Gmail's is "Inbox (3) -
+    kumar@example.com - Gmail", or "… - Acme Mail" for a work account; Outlook on the web's is "Mail - Kumar Gaurav -
+    Outlook".
+  - So: an address followed by "Gmail" or a name ending in " Mail", or "Mail" first and "Outlook" after it. "Home -
+    Daily Mail" has no address, and Outlook's calendar is "Calendar - … - Outlook", so neither is mail.
+  - The title is read through Accessibility (already granted; two calls of at most 0.25 s each) only when a browser
+    is in front, and is never logged.
+  - The page's address would be more exact, but a Chromium browser exposes it only with its web accessibility
+    switched on, which slows the browser, or through AppleScript, which needs a new permission per browser.
 - **Chat** drops the final full stop the speech model gave a message of one or two sentences. These keep theirs:
   - a full stop said out loud ("see you at five full stop"; the user's choice, 2026-11-22);
   - question and exclamation marks;
@@ -32,7 +43,9 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
     as one.
 - **Email, rules (with AI on or off):**
   - **The greeting** goes on its own line with a blank line after it: "Hi Mark,", "Good morning team,", "Dear Mr.
-    Sharma,", "Hi,". It must open the dictation and end in a comma.
+    Sharma,", "Hi,". It must open the dictation and end in a comma, or a full stop, which becomes a comma: Parakeet
+    wrote "Hi Mark." after a pause on the user's Mac (2026-11-23). A title's full stop ("Mr.", "Prof.") doesn't
+    end it.
     - A break the speaker or the AI put after it stays as it is.
     - The text after it starts with a capital: Thorough left "kal" lowercase.
   - **A sign-off ending the email**, after a sentence, goes after a blank line, with the name on the next line:
@@ -77,6 +90,9 @@ Status: Accepted · 2026-11-22 (v2 ticket 13)
 - **The guard for other apps is unchanged.** It still compares only the sequence of breaks, so a break the AI
   moves elsewhere with the same count passes there. Email now checks positions.
 - **Not detected:**
+  - Gmail installed as a browser's web app (its own bundle ID), and beta builds of the browsers;
   - sign-offs in Hindi;
   - a greeting with only lowercase names ("hi mark,");
   - a sign-off name the speech model wrote in lowercase.
+- **A capitalised first sentence that opens with a greeting word** ("Hey Siri. Set…") goes on a line of its own in
+  an email, since "Hi Mark." looks the same.

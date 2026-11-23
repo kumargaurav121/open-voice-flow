@@ -117,8 +117,8 @@ struct EvalRunner {
         let pipeline = TranscriptPipeline(speech: speech, terms: { dictionary }, isEnglishWord: { EnglishWords.contains($0) },
                                           sentencePause: args["--sentence-pause"].flatMap(Double.init) ?? LiveTranscriber.sentencePause,
                                           partLengths: { _ in parakeet == nil ? .short : .long })
-        let transcriber = pipeline.dictation(selectedAI: { cleaner }, frontmostApp: { app }, styles: { AppStyles() },
-                                             log: { print("     cleanup: \($0)") })
+        let transcriber = pipeline.dictation(selectedAI: { cleaner }, frontmostApp: { app }, frontWindowTitle: { nil },
+                                             styles: { AppStyles() }, log: { print("     cleanup: \($0)") })
         let commandTranscriber = pipeline.commands()
         let trimmer = SilenceTrimmer()
         let clock = ContinuousClock()

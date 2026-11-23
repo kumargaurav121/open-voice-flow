@@ -87,6 +87,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var dictation = pipeline.dictation(
         selectedAI: { [weak self] in self?.activeCleaner },
         frontmostApp: { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
+        // Read only for a browser: its window's title names the page, so Gmail gets the email style.
+        frontWindowTitle: { FrontWindow.title() },
         styles: { [weak self] in self?.modes.mode.styles ?? AppStyles() },
         log: { [weak self] in self?.log.notice($0) }
     )

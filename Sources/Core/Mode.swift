@@ -107,9 +107,10 @@ public struct AppStyles: Codable, Equatable, Sendable {
 
     public init() {}
 
-    /// The style for a dictation into the app with this bundle ID (nil: no app in front).
-    public func style(forApp bundleID: String?) -> AppCategory {
-        style(for: AppCategory(bundleID: bundleID))
+    /// The style for a dictation into the app with this bundle ID (nil: no app in front), whose front window has
+    /// `windowTitle` (read only for a browser).
+    public func style(forApp bundleID: String?, windowTitle: () -> String? = { nil }) -> AppCategory {
+        style(for: AppCategory(bundleID: bundleID, windowTitle: windowTitle))
     }
 
     /// The style for a dictation into an app of `category`: none (`.other`) when that style is switched off.

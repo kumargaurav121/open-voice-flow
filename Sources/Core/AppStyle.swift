@@ -20,8 +20,15 @@ public enum AppCategory: String, CaseIterable, Sendable {
 
     static let emailApps: Set<String> = ["com.apple.mail", "com.microsoft.Outlook"]
 
-    /// The category of the app with this bundle ID (nil: no app in front).
-    public init(bundleID: String?) {
+    /// Browsers, whose front window's title names the page in them: Dia, Chrome, Arc, Brave, Safari, Edge.
+    static let browsers: Set<String> = [
+        "company.thebrowser.dia", "com.google.Chrome", "company.thebrowser.Browser" /* Arc */, "com.brave.Browser",
+        "com.apple.Safari", "com.microsoft.edgemac",
+    ]
+
+    /// The category of the app with this bundle ID (nil: no app in front). In a browser, mail on the web is email,
+    /// by the front window's title (`windowTitle`, read only for a browser).
+    public init(bundleID: String?, windowTitle: () -> String?) {
         guard let bundleID else { self = .other; return }
         if Self.chatApps.contains(bundleID) {
             self = .chat
@@ -29,8 +36,21 @@ public enum AppCategory: String, CaseIterable, Sendable {
             self = .email
         } else if CodeContext.isCodeEditor(bundleID: bundleID) {
             self = .code
+        } else if Self.browsers.contains(bundleID), windowTitle().map(Self.isWebMail) == true {
+            self = .email
         } else {
             self = .other
+        }
+    }
+
+    /// A page of Gmail ("Inbox (3) - kumar@example.com - Gmail"; a work account's ends in its company's name,
+    /// "… - Acme Mail") or Outlook on the web's mail ("Mail - Kumar Gaurav - Outlook"; its calendar's starts
+    /// "Calendar"). A browser may add its profile.
+    static func isWebMail(_ title: String) -> Bool {
+        let parts = title.components(separatedBy: " - ")
+        return parts.first == "Mail" && parts.contains("Outlook") || zip(parts, parts.dropFirst()).contains { account, site in
+            account.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
+                && (site == "Gmail" || site.hasSuffix(" Mail"))
         }
     }
 }
@@ -79,12 +99,16 @@ enum AppStyle {
 
     // MARK: Email
 
-    /// A greeting opening an email ("Hi Mark,", "Good morning, team,", "Dear Mr. Sharma,"), up to its comma, then
-    /// either the text after it or a line break.
+    /// A greeting opening an email ("Hi Mark,", "Good morning, team,", "Dear Mr. Sharma,"), up to its comma or the
+    /// full stop a speech model may give it after a pause ("Hi Mark."; a title's doesn't count), then either the
+    /// text after it or a line break.
     private static let greeting = #"^(?i:hi|hello|hey|dear|good morning|good afternoon|good evening|namaste)"#
-        + #"(?:,? +\#(greeted)(?: +\#(greeted)){0,3})?,(?=[ \t]+\S|[ \t]*\n)"#
+        + #"(?:,? +\#(greeted)(?: +\#(greeted)){0,3})?(?:,|(?<!\#(abbreviated))\.)(?=[ \t]+\S|[ \t]*\n)"#
     /// Who a greeting greets: a name, a title, or a group ("team"), and "and" or "&" between them.
-    private static let greeted = #"(?:(?:Mr|Mrs|Ms|Dr)\.|\p{Lu}[\p{L}'-]*|&|(?i:and|team|all|everyone|everybody|there|guys|folks|both))"#
+    private static let greeted = #"(?:\#(abbreviated)\.|\p{Lu}[\p{L}'-]*|&|(?i:and|team|all|everyone|everybody|there|guys|folks|both))"#
+    /// A title or an initial before a name, whose full stop is part of the greeting ("Dear Prof. Rao,", "Hi J.
+    /// Smith,").
+    private static let abbreviated = #"\b(?:Mr|Mrs|Ms|Dr|Prof|St|\p{Lu})"#
 
     /// A sign-off ending an email, after a sentence ("… Friday. Thanks, Kumar", "Best regards, Kumar Gaurav."),
     /// and the name that may follow it. Longer phrases first: "Best Regards" isn't "Best" signed "Regards".
@@ -104,7 +128,8 @@ enum AppStyle {
             // Already on a line of its own (said, or the AI's): its breaks stay, and the text after it starts with a
             // capital, which the AI may leave out.
             let breaks = rest.first == "\n" ? rest.prefix(while: \.isWhitespace) : "\n\n"
-            text = text[opening] + breaks + String(rest.drop(while: \.isWhitespace)).capitalizedFirst
+            // It ends in a comma, as a greeting does, whatever the speech model gave it.
+            text = text[opening].dropLast() + "," + breaks + String(rest.drop(while: \.isWhitespace)).capitalizedFirst
         }
         let whole = NSRange(text.startIndex..., in: text)
         guard let match = signOff.firstMatch(in: text, range: whole), let found = Range(match.range, in: text),
