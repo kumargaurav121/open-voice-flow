@@ -1139,6 +1139,83 @@ extension TranscriptPipelineTests {
     }
 }
 
+extension TranscriptPipelineTests {
+    // MARK: Restarts (v2 ticket 19)
+
+    /// The eval's restarts as Parakeet wrote them (docs/eval/reports/2026-11-18-parakeet-in-english-mode.md),
+    /// trimmed: the first try goes, the second stays.
+    nonisolated static let restarts = [
+        ("We also We are also testing a smaller version of the Hindi model.",
+         "We are also testing a smaller version of the Hindi model."),  // 35: an abandoned start
+        ("Remind me to renew the domain before the tw twenty-eighth of February.",
+         "Remind me to renew the domain before the 28th of February."),  // 51: a word broken off
+        ("Remind me to renew the domain before the tw 28th of February.",
+         "Remind me to renew the domain before the 28th of February."),  // 51, had the model written the digits
+        ("Our monthly cloud bill dropped from the from about eighteen thousand to eleven thousand rupees.",
+         "Our monthly cloud bill dropped from about 18,000 to 11,000 rupees."),  // 58
+        ("Please sch schedule it for Monday.", "Please schedule it for Monday."),  // a word broken off
+    ]
+
+    @Test(arguments: restarts)
+    mutating func aRestartKeepsOnlyTheSecondTry(_ heard: String, _ meant: String) async {
+        language = .english
+
+        #expect(await press(hearing: heard).pasted == meant)
+    }
+
+    /// Repeats that are meant stay, and so do clips 61, 6 and 63, which look like ordinary speech (the user's
+    /// choices, 2026-11-23), and the phrases the reviews found the first rules changed.
+    @Test(arguments: ["That was very, very good.", "Bye bye, see you tomorrow.", "I know that that's wrong.",
+                      "I think I can finish it today.", "And that is that.", "It is what it is.",
+                      "It might be because of the cache.", "Let's go to today's meeting.", "Jaldi jaldi aao.",
+                      "I'll ship it to the team, to the beta group tomorrow morning.",  // clip 61: like a list
+                      "Deploy the next js. Next.js application.",  // clip 6: like "log in. Login"
+                      "The app feels slow on older lap laptops.",  // clip 63: like "per person"
+                      "We pay per person.", "The app appears slow.", "Let's go golfing.",
+                      "Email John Johnson.", "I know, I know, I'm late.", "We did it, we did it!",
+                      "If it works, it works.", "Add it to the to do list.", "Write a test for a for loop.",
+                      "By the end of the week or the end of the month.",
+                      "Tell the rest of the team and the rest of the company.",
+                      "I tried it over and over and it still failed.", "All in all, it went well.",
+                      "Please log in. Login is required.", "I'll check in. Check-in is at noon.",
+                      "Send the PR process doc."])
+    mutating func meantRepeatsStay(_ heard: String) async {
+        language = .english
+
+        #expect(await press(hearing: heard).pasted == heard)
+    }
+
+    /// Numbers that start the same way are one number, not a restart (the rules cleanup's own expectations).
+    @Test mutating func numbersStartingAlikeStay() async {
+        language = .english
+
+        #expect(await press(hearing: "Back in nineteen ninety nine and again in twenty twenty-six.").pasted
+                == "Back in 1999 and again in 2026.")
+        #expect(await press(hearing: "Flight leaves at six.15 in the morning.").pasted == "Flight leaves at 6:15 in the morning.")
+        #expect(await press(hearing: "Book it from nine thirty until eleven fifteen.").pasted
+                == "Book it from 9:30 until 11:15.")
+    }
+
+    /// English mode only (the user's choice): Hinglish keeps everything as said.
+    @Test mutating func hinglishKeepsRestartsAsSaid() async {
+        language = .hinglish
+
+        #expect(await press(hearing: "We also We are also ready.").pasted == "We also We are also ready.")
+    }
+
+    /// A restart taken out is a guess: Undo Formatting brings it back (the user's choice).
+    @Test mutating func undoFormattingBringsARestartBack() async {
+        language = .english
+        let session = makeSession()
+        _ = await press(hearing: "It dropped from the from about ten.", on: session)
+
+        await session.undoFormatting()
+
+        #expect(inserter.replacements == [.init(old: "It dropped from about 10.",
+                                                new: "It dropped from the from about 10.")])
+    }
+}
+
 /// A switch the test can flip while the session runs.
 @MainActor
 final class Switch {

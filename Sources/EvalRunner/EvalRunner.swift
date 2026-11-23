@@ -46,7 +46,11 @@ struct EvalRunner {
         if let text = args["--clean-text"] {
             let cleaner = LLMCleaner(folder: llmFolder)
             try await cleaner.prepare()
-            let rules = CleanupSpeechToText.rules(text, formatting: true)  // as dictation
+            // As dictation, in --language (the runner's default, Hinglish, keeps restarts as said).
+            guard let language = Language(rawValue: args["--language"] ?? "hinglish") else {
+                throw RunnerError.usage("--language must be one of: \(Language.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            let rules = CleanupSpeechToText.rules(text, formatting: true, language: language)
             let clock = ContinuousClock()
             var ai = ""
             let took = try await clock.measure { ai = try await cleaner.clean(rules, style: style) }

@@ -1,7 +1,8 @@
 import Foundation
 
 /// The always-on cleanup pass: fast (no model), conservative, and safe for Hinglish.
-/// Only removes what never carries meaning — hesitation sounds and stuttered English function words —
+/// Only removes what never carries meaning — hesitation sounds and stuttered English function words, and for
+/// English dictation a restarted phrase's first try (`removingRestarts`, a guess Undo Formatting undoes) —
 /// and tidies spacing and capitalisation, and writes spoken numbers as digits (`SpokenNumbers`). Words that are
 /// *sometimes* fillers ("like", "so", "matlab", "basically") are left for the optional AI pass, and Hindi
 /// reduplication ("jaldi jaldi") is kept.
@@ -12,7 +13,9 @@ public enum RulesCleanup {
         "the", "a", "an", "i", "to", "and", "of", "in", "on", "is", "it", "that", "we", "you", "for", "with", "this",
     ]
 
-    public static func clean(_ text: String) -> String {
+    /// - Parameter removingRestarts: also drops a phrase the speaker restarted (`SpokenRestarts`; English
+    ///   dictation, v2 ticket 19), before numbers are written as digits.
+    public static func clean(_ text: String, removingRestarts: Bool = false) -> String {
         var words: [String] = []
         for raw in text.split(whereSeparator: \.isWhitespace).map(String.init) {
             let bare = raw.lowercased().trimmingCharacters(in: .punctuationCharacters)
@@ -36,6 +39,7 @@ public enum RulesCleanup {
             }
             words.append(raw)
         }
+        if removingRestarts { words = SpokenRestarts.remove(words) }
         var result = words.joined(separator: " ")
         result = result.replacingOccurrences(of: #"\s+([,.;:?!])"#, with: "$1", options: .regularExpression)
         result = result.replacingOccurrences(of: #"^[,;:]\s*"#, with: "", options: .regularExpression)

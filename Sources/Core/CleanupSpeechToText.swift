@@ -69,7 +69,7 @@ public final class CleanupSpeechToText: SpeechToText {
             return raw
         }
         unformatted = RulesCleanup.clean(raw)
-        let cleaned = await aiCleaned(Self.rules(raw, formatting: formatting), style: style)
+        let cleaned = await aiCleaned(Self.rules(raw, formatting: formatting, language: language), style: style)
         return formatting ? Self.layout(cleaned, style: style, raw: raw) : cleaned
     }
 
@@ -106,10 +106,11 @@ public final class CleanupSpeechToText: SpeechToText {
         return AICleanupGuard.accepts(original: rules, rewritten: trimmed, mayAddBreaks: style == .email) ? trimmed : nil
     }
 
-    /// The rules pass: the rules cleanup, then with `formatting` (dictation) spoken punctuation and line
+    /// The rules pass: the rules cleanup (for English dictation, dropping a restarted phrase's first try; Hinglish
+    /// keeps its repeats, the user's choice), then with `formatting` (dictation) spoken punctuation and line
     /// breaks. Commands have no formatting: their parser reads one line.
-    nonisolated public static func rules(_ raw: String, formatting: Bool) -> String {
-        let cleaned = RulesCleanup.clean(raw)
+    nonisolated public static func rules(_ raw: String, formatting: Bool, language: Language) -> String {
+        let cleaned = RulesCleanup.clean(raw, removingRestarts: formatting && language == .english)
         return formatting ? SpokenPunctuation.apply(cleaned) : cleaned
     }
 
