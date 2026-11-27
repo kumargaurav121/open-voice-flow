@@ -50,13 +50,16 @@ struct EvalRunner {
             guard let language = Language(rawValue: args["--language"] ?? "hinglish") else {
                 throw RunnerError.usage("--language must be one of: \(Language.allCases.map(\.rawValue).joined(separator: ", "))")
             }
-            let rules = CleanupSpeechToText.rules(text, formatting: true, language: language)
+            // Breaks said first or last stay out of the AI's input, as in the app.
+            let edges = CleanupSpeechToText.edgeBreaks(CleanupSpeechToText.rules(text, formatting: true, language: language))
+            let rules = edges.text
             let clock = ContinuousClock()
             var ai = ""
             let took = try await clock.measure { ai = try await cleaner.clean(rules, style: style) }
             let accepted = CleanupSpeechToText.accepted(ai, over: rules, style: style)
             print("raw:   \(text)\nrules: \(rules)\nai:    \(ai)  (\(took), guard \(accepted != nil ? "accepts" : "rejects"))")
-            print("final: \(CleanupSpeechToText.layout(accepted ?? rules, style: style, raw: text))")  // as pasted, AI cleanup on
+            let final = edges.before + CleanupSpeechToText.layout(accepted ?? rules, style: style, raw: text) + edges.after
+            print("final: \(final)")  // as pasted, AI cleanup on
             return
         }
         let clips = URL(filePath: args["--clips"] ?? "docs/eval/clips", directoryHint: .isDirectory)

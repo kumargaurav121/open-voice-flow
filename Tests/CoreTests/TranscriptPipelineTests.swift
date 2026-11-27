@@ -188,6 +188,43 @@ struct TranscriptPipelineTests {
         #expect(pasted == "Hi Rohan,\nThanks for the update.")
     }
 
+    @Test func aBreakSaidFirstStartsTheTextOnANewLine() async {
+        #expect(await press(hearing: "New paragraph, the second point is ready").pasted == "\n\nThe second point is ready")
+    }
+
+    @Test func aBreakSaidLastLeavesTheCursorOnTheNextLine() async {
+        #expect(await press(hearing: "Thanks, new line").pasted == "Thanks,\n")
+        #expect(await press(hearing: "See you then. New paragraph.").pasted == "See you then.\n\n")
+    }
+
+    @Test func aBreakSaidAloneIsPasted() async {
+        #expect(await press(hearing: "New line.").pasted == "\n")
+        #expect(await press(hearing: "new paragraph").pasted == "\n\n")
+    }
+
+    @Test mutating func theAICleanupPastesTheBreaksSaidFirstOrLastTheSame() async {
+        aiEnabled = true
+        #expect(await press(hearing: "New paragraph, the second point is ready").pasted == "\n\nThe second point is ready")
+        #expect(await press(hearing: "Thanks, new line").pasted == "Thanks,\n")
+        #expect(await press(hearing: "New line.").pasted == "\n")
+
+        // It sees only the text between them, so a rewrite can't lose them.
+        ai.reply = { _ in "The second point is ready." }
+        #expect(await press(hearing: "New paragraph, the second point is ready").pasted == "\n\nThe second point is ready.")
+        #expect(ai.inputs.last == "The second point is ready")
+    }
+
+    @Test mutating func aModelsOwnBreaksAndSpacesAtTheEndsAreTrimmed() async {
+        #expect(await press(hearing: "\n Hello there. \n").pasted == "Hello there.")
+        frontmostApp = "com.apple.Terminal"
+        #expect(await press(hearing: "\nls -la \n").pasted == "ls -la")
+
+        let pastes = inserter.inserted.count
+        let events = await press(hearing: " \n ").events
+        #expect(inserter.inserted.count == pastes)
+        #expect(events.contains(.ignored(.emptyTranscript)))
+    }
+
     @Test mutating func theAICleanupKeepsTheSpokenBreaksOrIsNotUsed() async {
         aiEnabled = true
         let heard = "Hi Rohan comma new line thanks for the update full stop new paragraph let's ship it"
@@ -452,6 +489,19 @@ struct TranscriptPipelineTests {
         #expect(events == [.formattingUndone])
     }
 
+    @Test func undoFormattingPutsBackABreakSaidFirstOrLastAsWords() async {
+        let session = makeSession()
+        _ = await press(hearing: "New paragraph, the second point is ready", on: session)
+        _ = await undo(on: session)
+        _ = await press(hearing: "Thanks, new line", on: session)
+        _ = await undo(on: session)
+
+        #expect(inserter.replacements == [
+            .init(old: "\n\nThe second point is ready", new: "New paragraph, the second point is ready"),
+            .init(old: "Thanks,\n", new: "Thanks, new line"),
+        ])
+    }
+
     @Test func undoFormattingLeavesEditedTextAloneAndSaysSo() async {
         let session = makeSession()
         _ = await press(hearing: "Hi Rohan comma new line thanks", on: session)
@@ -585,7 +635,7 @@ struct TranscriptPipelineTests {
         #expect(await press(hearing: "see you at five full stop").pasted == "See you at five.")
         #expect(await press(hearing: "See you at five, period.").pasted == "See you at five.")
         #expect(await press(hearing: "Hi Rohan comma new line thanks for the update full stop new line").pasted
-                == "Hi Rohan,\nThanks for the update.")
+                == "Hi Rohan,\nThanks for the update.\n")
     }
 
     @Test mutating func aLongerChatMessageKeepsItsFullStops() async {
@@ -606,11 +656,12 @@ struct TranscriptPipelineTests {
     }
 
     @Test mutating func aBreakSaidAtTheEndOrStartDoesntHideTheStyle() async {
+        // The style applies between the breaks, which are pasted around it (v2 ticket 21).
         frontmostApp = "com.tinyspeck.slackmacgap"
-        #expect(await press(hearing: "See you at five. New line").pasted == "See you at five")
+        #expect(await press(hearing: "See you at five. New line").pasted == "See you at five\n")
 
         frontmostApp = "com.apple.mail"
-        #expect(await press(hearing: "New line hi Mark, thanks for the call.").pasted == "Hi Mark,\n\nThanks for the call.")
+        #expect(await press(hearing: "New line hi Mark, thanks for the call.").pasted == "\nHi Mark,\n\nThanks for the call.")
     }
 
     @Test mutating func aChatMessageCountsSentencesNotFullStops() async {

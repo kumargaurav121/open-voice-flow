@@ -55,7 +55,9 @@ public final class CleanupSpeechToText: SpeechToText {
     public func transcribe(_ clip: AudioClip, language: Language) async throws -> String {
         unformatted = nil
         lastWasSnippet = false
-        let raw = try await model.transcribe(clip, language: language)
+        // The model's own spaces and breaks at the ends go: only a break said is pasted there (v2 ticket 21), and in a
+        // terminal a trailing one would run the command.
+        let raw = try await model.transcribe(clip, language: language).trimmingCharacters(in: .whitespacesAndNewlines)
         let style = style()
         if style != .other { log("Style: \(style)") }  // the app's kind, never the text
         if let snippet = Snippet.matching(raw, in: snippets()) {
@@ -69,8 +71,19 @@ public final class CleanupSpeechToText: SpeechToText {
             return raw
         }
         unformatted = RulesCleanup.clean(raw)
-        let cleaned = await aiCleaned(Self.rules(raw, formatting: formatting, language: language), style: style)
-        return formatting ? Self.layout(cleaned, style: style, raw: raw) : cleaned
+        let edges = Self.edgeBreaks(Self.rules(raw, formatting: formatting, language: language))
+        let cleaned = await aiCleaned(edges.text, style: style)
+        return edges.before + (formatting ? Self.layout(cleaned, style: style, raw: raw) : cleaned) + edges.after
+    }
+
+    /// The text between the line breaks said first and last ("new paragraph, the second point is…", "…thanks, new
+    /// line"; v2 ticket 21), and those breaks. They stay out of the AI's input and the layout, which both see
+    /// one stretch of text, and are pasted around it.
+    nonisolated public static func edgeBreaks(_ text: String) -> (before: String, text: String, after: String) {
+        let before = text.prefix(while: \.isNewline)
+        let rest = text.dropFirst(before.count)
+        let after = rest.reversed().prefix(while: \.isNewline)
+        return (String(before), String(rest.dropLast(after.count)), String(after))
     }
 
     /// The AI's rewrite when AI cleanup is on and the guard accepts it; otherwise the rules text.

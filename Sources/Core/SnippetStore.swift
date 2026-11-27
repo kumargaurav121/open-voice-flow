@@ -30,7 +30,7 @@ public final class SnippetStore {
         return RulesCleanup.clean(cue).contains(where: { $0.isASCII && ($0.isLetter || $0.isNumber) }) ? cue : nil
     }
 
-    /// A text as saved, and so as pasted: trimmed, like every dictation. Nil if blank.
+    /// A text as saved, and so as pasted: trimmed. Nil if blank.
     nonisolated public static func normalizedText(_ text: String) -> String? {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text

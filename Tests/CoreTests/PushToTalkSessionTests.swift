@@ -54,7 +54,8 @@ struct PushToTalkSessionTests {
     }
 
     @Test func blankTranscriptInsertsNothing() async {
-        stt.transcript = "   \n"
+        // Only spaces and tabs: a line break alone is one the speaker said (v2 ticket 21).
+        stt.transcript = "  \t "
         let session = makeSession()
         var events: [SessionEvent] = []
         session.onEvent = { events.append($0) }

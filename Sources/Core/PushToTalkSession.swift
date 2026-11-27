@@ -304,8 +304,10 @@ public final class PushToTalkSession {
         // Commands can have their own pipeline (the app's skips AI cleanup).
         let transcriber = kind == .command ? commandSpeechToText ?? speechToText : speechToText
         do {
+            // Only spaces and tabs: a line break first or last was said (v2 ticket 21); the model's own never get
+            // here (`CleanupSpeechToText` trims them).
             text = try await transcriber.transcribe(clip, language: language)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .whitespaces)
         } catch {
             if !cancelled { onEvent(.failed(.transcription)) }
             return

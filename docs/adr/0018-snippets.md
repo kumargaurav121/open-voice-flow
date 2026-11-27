@@ -31,7 +31,7 @@ Status: Accepted · 2026-11-23 (v2 ticket 14)
 - **Commands never match:** the command pipeline has no snippets.
 - **The store** (`SnippetStore`, like `DictionaryStore`): an ordered list of cue and text, saved as JSON in local
   preferences, edited in place.
-  - Both are trimmed. Every dictation is trimmed before it's pasted, so what's saved is what's pasted.
+  - Both are trimmed, so what's saved is what's pasted.
   - A cue needs an English letter or a digit beyond fillers: transcripts are in English letters, and a cue of
     fillers alone ("um") would match a hesitation. A cue said the same way as another's ("My Email!") is refused.
   - Each saved snippet is read on its own: one unreadable or duplicate entry drops only itself.

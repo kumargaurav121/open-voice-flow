@@ -99,8 +99,8 @@ public enum AppCategory: String, CaseIterable, Sendable {
 enum AppStyle {
     /// - Parameter saidFullStop: the text ends with a full stop the speaker said, which a chat message keeps.
     static func apply(_ text: String, for category: AppCategory, saidFullStop: Bool) -> String {
-        // A break said at the very start or end isn't pasted (every transcript is trimmed), so it can't hide the end
-        // or the greeting.
+        // A break said first or last is pasted around the styled text (`CleanupSpeechToText.edgeBreaks`), so it
+        // can't hide the end or the greeting.
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return switch category {
         case .chat: saidFullStop ? text : casual(text)
