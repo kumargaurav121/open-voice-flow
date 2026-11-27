@@ -13,8 +13,7 @@ fragment with a vowel"). Parakeet isn't clearly worse, so English mode keeps it 
 - **Recordings:** the user turned on Keep audio recordings and read 8 short messages, one per dictation, in
   English mode with AI Cleanup off, in TextEdit (2026-11-27, one session). The script's first two lines are the
   Nov 20 sentences.
-- **Mic:** not named yet. The default input right after the session was the MacBook Pro's built-in mic, but
-  that doesn't show what the app recorded from.
+- **Mic:** the MacBook Pro's built-in mic (the user's word).
 - **The kept WAVs** (16 kHz mono, 2.4-8.5 s, 43 s in all) were copied to a scratch clips folder and run through
   `EvalRunner --clips` at speaking pace (`--realtime`), with the app's text pipeline, no dictionary:
   - **Parakeet v2** (`--stt parakeet-v2`, the installed model, long parts): run `t20-v2`.
@@ -22,9 +21,9 @@ fragment with a vowel"). Parakeet isn't clearly worse, so English mode keeps it 
 - **References:** the script, changed where the speaker said something else (both models agree on it):
   - clip 3 "I have" for "I've";
   - clip 4 "stand-up" for "standup" (a spelling only, the same for both);
-  - clip 5 "faster than the older laptops" for "faster on older laptops". The speaker restarted here: Parakeet
-    wrote "than the old wa older laptops". Nobody listened to the clip, so this reference is Whisper's reading,
-    and the restart is scored both ways below.
+  - clip 5 "faster than the older laptops" for "faster on older laptops". The speaker stumbled here (the user
+    confirms): Parakeet wrote "than the old wa older laptops". The meant words are Whisper's reading, and the
+    restart is scored both ways below.
 - **Scored** with `ovf_eval.score` on the scratch folder. Scratch copies deleted afterwards.
 
 ## Accuracy (99 words)
